@@ -1,0 +1,44 @@
+
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sisterna - Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <main class="container">
+    <header class="row">
+      <h1>Sisterna</h1>
+      <div class="controls">
+        <label>Mes:
+          <input id="month" type="month" />
+        </label>
+        <button id="refresh">Actualizar</button>
+      </div>
+    </header>
+
+    <section class="grid">
+      <div class="card">
+        <h2>Top consumidor del mes</h2>
+        <div id="topConsumer" class="big"></div>
+      </div>
+
+      <div class="card">
+        <h2>Alertas</h2>
+        <ul id="alerts"></ul>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Consumo por dispositivo (Wh) - mes</h2>
+      <canvas id="barChart"></canvas>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
+
