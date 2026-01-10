@@ -70,25 +70,32 @@ def ingest_measurement():
     """
     ESP32 manda medición.
     Header: X-API-Key: <api_key del device>
-    Body JSON:
+
+    Body JSON (ts opcional):
     {
-      "ts": "2026-01-07T12:00:00Z",
+      "ts": "2026-01-07T12:00:00Z",   <-- opcional
       "voltage": 220.1,
       "current": 1.42,
       "power": 312.5,
-      "energy_wh": 12.3
+      "energy_wh": 12.3              <-- requerido
     }
+
+    Si no viene ts, el backend usa UTC actual.
     """
     api_key = (request.headers.get("X-API-Key") or "").strip()
     if not api_key:
         return jsonify({"error": "Missing X-API-Key"}), 401
 
     payload = request.get_json(silent=True) or {}
-    ts = (payload.get("ts") or "").strip()
-    energy_wh = payload.get("energy_wh")
 
-    if not ts or energy_wh is None:
-        return jsonify({"error": "ts and energy_wh are required"}), 400
+    # ts ahora es OPCIONAL: si no viene, lo generamos en UTC
+    ts = (payload.get("ts") or "").strip()
+    if not ts:
+        ts = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+    energy_wh = payload.get("energy_wh")
+    if energy_wh is None:
+        return jsonify({"error": "energy_wh is required"}), 400
 
     voltage = payload.get("voltage")
     current = payload.get("current")
@@ -109,8 +116,7 @@ def ingest_measurement():
             (dev["id"], ts, voltage, current, power, float(energy_wh)),
         )
 
-    return jsonify({"ok": True}), 201
-
+    return jsonify({"ok": True, "ts": ts}), 201
 
 # ---------------------------
 # METRICS (Dashboard)
@@ -172,3 +178,31 @@ def summary_month():
         "top_consumer": top,
         "alerts": alerts
     })
+@api_bp.get("/metrics/daily")
+def daily_series():
+    """
+    Query: device_id=1&from=2026-01-01&to=2026-01-31
+    Returns: [{day, energy_wh}]
+    """
+    device_id = request.args.get("device_id", type=int)
+    date_from = request.args.get("from", "")
+    date_to = request.args.get("to", "")
+
+    if not device_id or not date_from or not date_to:
+        return jsonify({"error": "device_id, from, to are required"}), 400
+
+    with get_con(_db_path()) as con:
+        rows = con.execute(
+            """
+            SELECT substr(ts, 1, 10) as day, SUM(energy_wh) as energy_wh
+            FROM measurements
+            WHERE device_id = ?
+              AND substr(ts, 1, 10) >= ?
+              AND substr(ts, 1, 10) <= ?
+            GROUP BY substr(ts, 1, 10)
+            ORDER BY day
+            """,
+            (device_id, date_from, date_to),
+        ).fetchall()
+
+    return jsonify([{"day": r["day"], "energy_wh": r["energy_wh"] or 0} for r in rows])
