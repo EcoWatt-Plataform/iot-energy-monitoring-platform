@@ -124,26 +124,26 @@ def ingest_measurement():
 @api_bp.get("/metrics/summary_month")
 def summary_month():
     """
-    Dashboard pide resumen del mes.
-    Query: month=YYYY-MM   ej: 2026-01
-
-    Respuesta:
-    {
-      month,
-      devices: [{id,name,monthly_threshold_wh,energy_wh}],
-      top_consumer: {...} | null,
-      alerts: [...]
-    }
+    Query: month=YYYY-MM
+    Devuelve totales del mes + stats por dispositivo.
     """
     month = (request.args.get("month") or "").strip()
     if not month or len(month) != 7:
         return jsonify({"error": "month must be YYYY-MM"}), 400
 
     with get_con(_db_path()) as con:
-        totals = con.execute(
+        rows = con.execute(
             """
-            SELECT d.id, d.name, d.monthly_threshold_wh,
-                   COALESCE(SUM(m.energy_wh), 0) AS energy_wh
+            SELECT
+              d.id,
+              d.name,
+              d.monthly_threshold_wh,
+              COALESCE(SUM(m.energy_wh), 0) AS energy_wh,
+              COUNT(m.id) AS measurement_count,
+              COALESCE(AVG(m.power), 0) AS avg_power,
+              COALESCE(MAX(m.power), 0) AS max_power,
+              COALESCE(AVG(m.voltage), 0) AS avg_voltage,
+              COALESCE(AVG(m.current), 0) AS avg_current
             FROM devices d
             LEFT JOIN measurements m
               ON m.device_id = d.id
@@ -156,53 +156,43 @@ def summary_month():
 
     devices = []
     alerts = []
-    for r in totals:
+    month_total_wh = 0.0
+    month_measurements = 0
+
+    for r in rows:
         item = dict(r)
+        # normalizar a float/int
+        item["energy_wh"] = float(item["energy_wh"] or 0)
+        item["energy_kwh"] = item["energy_wh"] / 1000.0
+        item["measurement_count"] = int(item["measurement_count"] or 0)
+        item["avg_power"] = float(item["avg_power"] or 0)
+        item["max_power"] = float(item["max_power"] or 0)
+        item["avg_voltage"] = float(item["avg_voltage"] or 0)
+        item["avg_current"] = float(item["avg_current"] or 0)
+
+        month_total_wh += item["energy_wh"]
+        month_measurements += item["measurement_count"]
+
         devices.append(item)
 
         thr = float(item["monthly_threshold_wh"] or 0)
-        val = float(item["energy_wh"] or 0)
-        if thr > 0 and val > thr:
+        if thr > 0 and item["energy_wh"] > thr:
             alerts.append({
                 "device_id": item["id"],
                 "device_name": item["name"],
-                "energy_wh": val,
+                "energy_wh": item["energy_wh"],
                 "threshold_wh": thr,
                 "type": "MONTHLY_THRESHOLD_EXCEEDED"
             })
 
     top = devices[0] if devices else None
+
     return jsonify({
         "month": month,
+        "month_total_wh": month_total_wh,
+        "month_total_kwh": month_total_wh / 1000.0,
+        "month_measurements": month_measurements,
         "devices": devices,
         "top_consumer": top,
         "alerts": alerts
     })
-@api_bp.get("/metrics/daily")
-def daily_series():
-    """
-    Query: device_id=1&from=2026-01-01&to=2026-01-31
-    Returns: [{day, energy_wh}]
-    """
-    device_id = request.args.get("device_id", type=int)
-    date_from = request.args.get("from", "")
-    date_to = request.args.get("to", "")
-
-    if not device_id or not date_from or not date_to:
-        return jsonify({"error": "device_id, from, to are required"}), 400
-
-    with get_con(_db_path()) as con:
-        rows = con.execute(
-            """
-            SELECT substr(ts, 1, 10) as day, SUM(energy_wh) as energy_wh
-            FROM measurements
-            WHERE device_id = ?
-              AND substr(ts, 1, 10) >= ?
-              AND substr(ts, 1, 10) <= ?
-            GROUP BY substr(ts, 1, 10)
-            ORDER BY day
-            """,
-            (device_id, date_from, date_to),
-        ).fetchall()
-
-    return jsonify([{"day": r["day"], "energy_wh": r["energy_wh"] or 0} for r in rows])
