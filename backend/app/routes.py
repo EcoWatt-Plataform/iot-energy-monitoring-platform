@@ -60,6 +60,40 @@ def list_devices():
         ).fetchall()
 
     return jsonify([dict(r) for r in rows])
+@api_bp.patch("/devices/<int:device_id>")
+def update_device(device_id: int):
+    """
+    Actualiza campos de un dispositivo.
+    Body JSON: { "monthly_threshold_wh": 5000 }
+    """
+    data = request.get_json(silent=True) or {}
+
+    if "monthly_threshold_wh" not in data:
+        return jsonify({"error": "monthly_threshold_wh is required"}), 400
+
+    try:
+        thr = float(data["monthly_threshold_wh"])
+        if thr < 0:
+            return jsonify({"error": "monthly_threshold_wh must be >= 0"}), 400
+    except (TypeError, ValueError):
+        return jsonify({"error": "monthly_threshold_wh must be a number"}), 400
+
+    with get_con(_db_path()) as con:
+        cur = con.execute(
+            "UPDATE devices SET monthly_threshold_wh = ? WHERE id = ?",
+            (thr, device_id),
+        )
+
+        if cur.rowcount == 0:
+            return jsonify({"error": "device not found"}), 404
+
+        row = con.execute(
+            "SELECT id, name, monthly_threshold_wh, created_at FROM devices WHERE id = ?",
+            (device_id,),
+        ).fetchone()
+
+    return jsonify(dict(row)), 200
+
 
 
 # ---------------------------
