@@ -60,40 +60,6 @@ def list_devices():
         ).fetchall()
 
     return jsonify([dict(r) for r in rows])
-@api_bp.patch("/devices/<int:device_id>")
-def update_device(device_id: int):
-    """
-    Actualiza campos de un dispositivo.
-    Body JSON: { "monthly_threshold_wh": 5000 }
-    """
-    data = request.get_json(silent=True) or {}
-
-    if "monthly_threshold_wh" not in data:
-        return jsonify({"error": "monthly_threshold_wh is required"}), 400
-
-    try:
-        thr = float(data["monthly_threshold_wh"])
-        if thr < 0:
-            return jsonify({"error": "monthly_threshold_wh must be >= 0"}), 400
-    except (TypeError, ValueError):
-        return jsonify({"error": "monthly_threshold_wh must be a number"}), 400
-
-    with get_con(_db_path()) as con:
-        cur = con.execute(
-            "UPDATE devices SET monthly_threshold_wh = ? WHERE id = ?",
-            (thr, device_id),
-        )
-
-        if cur.rowcount == 0:
-            return jsonify({"error": "device not found"}), 404
-
-        row = con.execute(
-            "SELECT id, name, monthly_threshold_wh, created_at FROM devices WHERE id = ?",
-            (device_id,),
-        ).fetchone()
-
-    return jsonify(dict(row)), 200
-
 
 @api_bp.patch("/devices/<int:device_id>")
 def update_device(device_id: int):
@@ -193,35 +159,50 @@ def ingest_measurement():
 @api_bp.get("/metrics/summary_month")
 def summary_month():
     """
-    Query: month=YYYY-MM
+    Query:
+      - month=YYYY-MM  (obligatorio)
+      - device_id=1    (opcional)
+
     Devuelve totales del mes + stats por dispositivo.
+    Si se pasa device_id, filtra solo ese dispositivo.
     """
     month = (request.args.get("month") or "").strip()
     if not month or len(month) != 7:
         return jsonify({"error": "month must be YYYY-MM"}), 400
 
+    device_id = request.args.get("device_id", type=int)
+
+    # Query base: stats por dispositivo (LEFT JOIN para incluir devices sin mediciones)
+    base_sql = """
+        SELECT
+          d.id,
+          d.name,
+          d.monthly_threshold_wh,
+          COALESCE(SUM(m.energy_wh), 0) AS energy_wh,
+          COUNT(m.id) AS measurement_count,
+          COALESCE(AVG(m.power), 0) AS avg_power,
+          COALESCE(MAX(m.power), 0) AS max_power,
+          COALESCE(AVG(m.voltage), 0) AS avg_voltage,
+          COALESCE(AVG(m.current), 0) AS avg_current
+        FROM devices d
+        LEFT JOIN measurements m
+          ON m.device_id = d.id
+         AND substr(m.ts, 1, 7) = ?
+    """
+
+    params = [month]
+
+    if device_id is not None:
+        base_sql += "\nWHERE d.id = ?"
+        params.append(device_id)
+
+    base_sql += """
+        GROUP BY d.id
+        ORDER BY energy_wh DESC
+    """
+
     with get_con(_db_path()) as con:
-        rows = con.execute(
-            """
-            SELECT
-              d.id,
-              d.name,
-              d.monthly_threshold_wh,
-              COALESCE(SUM(m.energy_wh), 0) AS energy_wh,
-              COUNT(m.id) AS measurement_count,
-              COALESCE(AVG(m.power), 0) AS avg_power,
-              COALESCE(MAX(m.power), 0) AS max_power,
-              COALESCE(AVG(m.voltage), 0) AS avg_voltage,
-              COALESCE(AVG(m.current), 0) AS avg_current
-            FROM devices d
-            LEFT JOIN measurements m
-              ON m.device_id = d.id
-             AND substr(m.ts, 1, 7) = ?
-            GROUP BY d.id
-            ORDER BY energy_wh DESC
-            """,
-            (month,),
-        ).fetchall()
+        rows = con.execute(base_sql, tuple(params)).fetchall()
 
     devices = []
     alerts = []
@@ -230,7 +211,6 @@ def summary_month():
 
     for r in rows:
         item = dict(r)
-        # normalizar a float/int
         item["energy_wh"] = float(item["energy_wh"] or 0)
         item["energy_kwh"] = item["energy_wh"] / 1000.0
         item["measurement_count"] = int(item["measurement_count"] or 0)
@@ -258,6 +238,7 @@ def summary_month():
 
     return jsonify({
         "month": month,
+        "device_id": device_id,  # None si no se filtró
         "month_total_wh": month_total_wh,
         "month_total_kwh": month_total_wh / 1000.0,
         "month_measurements": month_measurements,
