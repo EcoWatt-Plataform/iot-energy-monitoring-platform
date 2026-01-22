@@ -42,21 +42,170 @@ function renderTable(devices) {
   });
 }
 
+let selectedDeviceId = null;
+
+
+async function loadDevices() {
+  const res = await fetch("/api/v1/devices");
+  const devices = await res.json();
+
+  const sel = document.getElementById("deviceSelect");
+  sel.innerHTML = "";
+
+  // Opción para comparar todos
+  const allOpt = document.createElement("option");
+  allOpt.value = "";
+  allOpt.textContent = "Todos (comparar)";
+  sel.appendChild(allOpt);
+
+  if (!Array.isArray(devices) || devices.length === 0) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "Sin dispositivos";
+    sel.appendChild(opt);
+    sel.disabled = true;
+    selectedDeviceId = null;
+    return;
+  }
+
+  sel.disabled = false;
+
+  devices.forEach(d => {
+    const opt = document.createElement("option");
+    opt.value = d.id;
+    opt.textContent = d.name;
+    sel.appendChild(opt);
+  });
+
+  // Default: Todos (comparar)
+  sel.value = "";
+  selectedDeviceId = null;
+
+  // Listener único (no se duplica)
+  sel.onchange = () => {
+    selectedDeviceId = sel.value ? Number(sel.value) : null;
+    loadSummary();
+  };
+  renderDeviceAdminTable(devices);
+
+}
+
+async function createDeviceFromUI() {
+  const name = document.getElementById("newDeviceName").value.trim();
+  const thr = Number(document.getElementById("newDeviceThreshold").value);
+
+  if (!name) {
+    alert("Poné un nombre para el dispositivo.");
+    return;
+  }
+  if (!Number.isFinite(thr) || thr < 0) {
+    alert("Threshold inválido.");
+    return;
+  }
+
+  const res = await fetch("/api/v1/devices", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, monthly_threshold_wh: thr })
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    alert(data.error || "Error creando dispositivo");
+    return;
+  }
+
+  // Mostrar API key (solo se ve acá al crearlo)
+  alert(`Dispositivo creado: ${data.name}\nID: ${data.id}\nAPI KEY: ${data.api_key}\n\nGuardala en un lugar seguro.`);
+
+  document.getElementById("newDeviceName").value = "";
+  await loadDevices();   // refresca dropdown + admin table
+  loadSummary();         // refresca resumen
+}
+
+async function updateDeviceFromUI(deviceId) {
+  const nameEl = document.getElementById(`dev-name-${deviceId}`);
+  const thrEl = document.getElementById(`dev-thr-${deviceId}`);
+
+  const payload = {
+    name: nameEl.value.trim(),
+    monthly_threshold_wh: Number(thrEl.value)
+  };
+
+  const res = await fetch(`/api/v1/devices/${deviceId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    alert(data.error || "Error actualizando dispositivo");
+    return;
+  }
+
+  await loadDevices();
+  loadSummary();
+}
+
+function renderDeviceAdminTable(devices) {
+  const tbody = document.querySelector("#deviceAdminTable tbody");
+  tbody.innerHTML = "";
+
+  if (!Array.isArray(devices) || devices.length === 0) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="4">No hay dispositivos</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
+
+  devices.forEach(d => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${d.id}</td>
+      <td>
+        <input id="dev-name-${d.id}" type="text" value="${d.name}" />
+      </td>
+      <td>
+        <input id="dev-thr-${d.id}" type="number" min="0" step="1" value="${d.monthly_threshold_wh ?? 0}" />
+      </td>
+      <td>
+        <button onclick="updateDeviceFromUI(${d.id})">Guardar</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
 async function loadSummary() {
   const month = document.getElementById("month").value;
-  const res = await fetch(`/api/v1/metrics/summary_month?month=${encodeURIComponent(month)}`);
+  let url = `/api/v1/metrics/summary_month?month=${encodeURIComponent(month)}`;
+  if (selectedDeviceId !== null) url += `&device_id=${selectedDeviceId}`;
+
+  const res = await fetch(url);
   const data = await res.json();
+
+  if (!res.ok) {
+    alert(data.error || "Error cargando resumen");
+    return;
+  }
+
+  // Cambiar el título según si hay filtro por device
+  const topTitle = document.getElementById("topTitle");
+  if (topTitle) {
+    topTitle.textContent = data.device_id ? "Dispositivo seleccionado" : "Top consumidor del mes";
+  }
+
+  // Mostrar el valor (si filtrás, data.devices[0] es el seleccionado)
+  const selected = (data.devices && data.devices.length) ? data.devices[0] : null;
+  document.getElementById("topConsumer").textContent =
+    selected ? `${selected.name} — ${fmt(selected.energy_kwh, 2)} kWh` : "Sin datos";
 
   // Total mes
   document.getElementById("monthTotal").textContent =
     data.month_total_kwh !== undefined ? `${fmt(data.month_total_kwh, 2)} kWh` : "—";
   document.getElementById("monthMeasurements").textContent =
     data.month_measurements !== undefined ? `${data.month_measurements} mediciones` : "—";
-
-  // Top consumidor
-  const top = data.top_consumer;
-  document.getElementById("topConsumer").textContent =
-    top ? `${top.name} — ${fmt(top.energy_kwh, 2)} kWh` : "Sin datos";
 
   // Alertas
   const ul = document.getElementById("alerts");
@@ -75,7 +224,7 @@ async function loadSummary() {
 
   // Bar chart (kWh)
   const labels = (data.devices || []).map(d => d.name);
-  const values = (data.devices || []).map(d => Number(d.energy_kwh || 0).toFixed(2));
+  const values = (data.devices || []).map(d => Number(d.energy_kwh || 0));
 
   const ctx = document.getElementById("barChart").getContext("2d");
   if (chart) chart.destroy();
@@ -94,7 +243,10 @@ async function loadSummary() {
 
 document.getElementById("refresh").addEventListener("click", loadSummary);
 
-(function init() {
+(async function init() {
   document.getElementById("month").value = toYYYYMM(new Date());
+  await loadDevices();
+  document.getElementById("createDeviceBtn").addEventListener("click", createDeviceFromUI);
   loadSummary();
 })();
+

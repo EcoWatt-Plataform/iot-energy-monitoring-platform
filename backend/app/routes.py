@@ -63,28 +63,42 @@ def list_devices():
 
 @api_bp.patch("/devices/<int:device_id>")
 def update_device(device_id: int):
-    """
-    Actualiza campos de un dispositivo.
-    Body JSON: { "monthly_threshold_wh": 5000 }
-    """
     data = request.get_json(silent=True) or {}
 
-    if "monthly_threshold_wh" not in data:
-        return jsonify({"error": "monthly_threshold_wh is required"}), 400
+    fields = []
+    params = []
 
-    try:
-        thr = float(data["monthly_threshold_wh"])
-        if thr < 0:
-            return jsonify({"error": "monthly_threshold_wh must be >= 0"}), 400
-    except (TypeError, ValueError):
-        return jsonify({"error": "monthly_threshold_wh must be a number"}), 400
+    # Renombrar
+    if "name" in data:
+        name = str(data["name"]).strip()
+        if not name:
+            return jsonify({"error": "name must be non-empty"}), 400
+        if len(name) > 80:
+            return jsonify({"error": "name too long (max 80)"}), 400
+        fields.append("name = ?")
+        params.append(name)
+
+    # Cambiar threshold
+    if "monthly_threshold_wh" in data:
+        try:
+            thr = float(data["monthly_threshold_wh"])
+            if thr < 0:
+                return jsonify({"error": "monthly_threshold_wh must be >= 0"}), 400
+        except (TypeError, ValueError):
+            return jsonify({"error": "monthly_threshold_wh must be a number"}), 400
+        fields.append("monthly_threshold_wh = ?")
+        params.append(thr)
+
+    if not fields:
+        return jsonify({"error": "provide at least one field: name, monthly_threshold_wh"}), 400
+
+    params.append(device_id)
 
     with get_con(_db_path()) as con:
         cur = con.execute(
-            "UPDATE devices SET monthly_threshold_wh = ? WHERE id = ?",
-            (thr, device_id),
+            f"UPDATE devices SET {', '.join(fields)} WHERE id = ?",
+            tuple(params),
         )
-
         if cur.rowcount == 0:
             return jsonify({"error": "device not found"}), 404
 
@@ -94,6 +108,7 @@ def update_device(device_id: int):
         ).fetchone()
 
     return jsonify(dict(row)), 200
+
 
 
 
