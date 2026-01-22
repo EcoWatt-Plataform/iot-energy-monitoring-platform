@@ -109,8 +109,22 @@ def update_device(device_id: int):
 
     return jsonify(dict(row)), 200
 
+@api_bp.delete("/devices/<int:device_id>")
+def delete_device(device_id: int):
+    """
+    Elimina un dispositivo y sus mediciones.
+    """
+    with get_con(_db_path()) as con:
+        # Verificar que exista
+        row = con.execute("SELECT id, name FROM devices WHERE id = ?", (device_id,)).fetchone()
+        if not row:
+            return jsonify({"error": "device not found"}), 404
 
+        # Borrar mediciones primero (para evitar problemas de FK)
+        con.execute("DELETE FROM measurements WHERE device_id = ?", (device_id,))
+        con.execute("DELETE FROM devices WHERE id = ?", (device_id,))
 
+    return jsonify({"ok": True, "deleted_device_id": device_id}), 200
 
 # ---------------------------
 # INGEST (ESP32 -> API)
@@ -260,4 +274,61 @@ def summary_month():
         "devices": devices,
         "top_consumer": top,
         "alerts": alerts
+    })
+
+@api_bp.get("/metrics/daily")
+def metrics_daily():
+    """
+    Query:
+      - device_id (int) obligatorio
+      - from=YYYY-MM-DD obligatorio
+      - to=YYYY-MM-DD obligatorio
+
+    Devuelve consumo diario agrupado por día (YYYY-MM-DD).
+    """
+    device_id = request.args.get("device_id", type=int)
+    date_from = (request.args.get("from") or "").strip()
+    date_to = (request.args.get("to") or "").strip()
+
+    if not device_id:
+        return jsonify({"error": "device_id is required"}), 400
+    if not date_from or len(date_from) != 10:
+        return jsonify({"error": "from must be YYYY-MM-DD"}), 400
+    if not date_to or len(date_to) != 10:
+        return jsonify({"error": "to must be YYYY-MM-DD"}), 400
+
+    with get_con(_db_path()) as con:
+        rows = con.execute(
+            """
+            SELECT
+              substr(m.ts, 1, 10) AS day,
+              COALESCE(SUM(m.energy_wh), 0) AS energy_wh,
+              COUNT(m.id) AS measurement_count,
+              COALESCE(AVG(m.power), 0) AS avg_power,
+              COALESCE(MAX(m.power), 0) AS max_power
+            FROM measurements m
+            WHERE m.device_id = ?
+              AND substr(m.ts, 1, 10) >= ?
+              AND substr(m.ts, 1, 10) <= ?
+            GROUP BY substr(m.ts, 1, 10)
+            ORDER BY day ASC
+            """,
+            (device_id, date_from, date_to),
+        ).fetchall()
+
+    days = []
+    for r in rows:
+        d = dict(r)
+        d["energy_wh"] = float(d["energy_wh"] or 0)
+        d["energy_kwh"] = d["energy_wh"] / 1000.0
+        d["measurement_count"] = int(d["measurement_count"] or 0)
+        d["avg_power"] = float(d["avg_power"] or 0)
+        d["max_power"] = float(d["max_power"] or 0)
+        days.append(d)
+
+    return jsonify({
+        "device_id": device_id,
+        "from": date_from,
+        "to": date_to,
+        "days": days
     })

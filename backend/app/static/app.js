@@ -152,6 +152,26 @@ async function updateDeviceFromUI(deviceId) {
   loadSummary();
 }
 
+async function deleteDeviceFromUI(deviceId) {
+  const ok = confirm(`¿Eliminar el dispositivo ${deviceId} y todas sus mediciones?`);
+  if (!ok) return;
+
+  const res = await fetch(`/api/v1/devices/${deviceId}`, { method: "DELETE" });
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    alert(data.error || "Error eliminando dispositivo");
+    return;
+  }
+
+  // Si el eliminado era el seleccionado, volvemos a "Todos"
+  if (selectedDeviceId === deviceId) selectedDeviceId = null;
+
+  await loadDevices();
+  loadSummary();
+}
+
+
 function renderDeviceAdminTable(devices) {
   const tbody = document.querySelector("#deviceAdminTable tbody");
   tbody.innerHTML = "";
@@ -175,7 +195,9 @@ function renderDeviceAdminTable(devices) {
       </td>
       <td>
         <button onclick="updateDeviceFromUI(${d.id})">Guardar</button>
+        <button onclick="deleteDeviceFromUI(${d.id})">Eliminar</button>
       </td>
+
     `;
     tbody.appendChild(tr);
   });
