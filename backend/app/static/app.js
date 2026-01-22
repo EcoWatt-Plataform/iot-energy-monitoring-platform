@@ -1,4 +1,9 @@
-let chart;
+let monthChart;
+let dailyChart;
+
+let selectedDeviceId = null;
+let devicesCache = [];
+
 
 function toYYYYMM(d) {
   const y = d.getFullYear();
@@ -42,12 +47,11 @@ function renderTable(devices) {
   });
 }
 
-let selectedDeviceId = null;
-
-
 async function loadDevices() {
   const res = await fetch("/api/v1/devices");
   const devices = await res.json();
+
+  devicesCache = Array.isArray(devices) ? devices : [];
 
   const sel = document.getElementById("deviceSelect");
   sel.innerHTML = "";
@@ -86,7 +90,7 @@ async function loadDevices() {
     selectedDeviceId = sel.value ? Number(sel.value) : null;
     loadSummary();
   };
-  renderDeviceAdminTable(devices);
+  renderDeviceAdminTable(devicesCache);
 
 }
 
@@ -176,6 +180,85 @@ function renderDeviceAdminTable(devices) {
     tbody.appendChild(tr);
   });
 }
+function pad2(n) { return String(n).padStart(2, "0"); }
+
+function monthRange(yyyyMM) {
+  const [yStr, mStr] = yyyyMM.split("-");
+  const y = Number(yStr);
+  const m = Number(mStr); // 1..12
+  const from = `${y}-${pad2(m)}-01`;
+  const lastDay = new Date(y, m, 0).getDate(); // día final del mes
+  const to = `${y}-${pad2(m)}-${pad2(lastDay)}`;
+  return { from, to };
+}
+
+function dateList(fromISO, toISO) {
+  const out = [];
+  const start = new Date(fromISO + "T00:00:00");
+  const end = new Date(toISO + "T00:00:00");
+
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const y = d.getFullYear();
+    const m = pad2(d.getMonth() + 1);
+    const day = pad2(d.getDate());
+    out.push(`${y}-${m}-${day}`);
+  }
+  return out;
+}
+
+async function fetchDaily(deviceId, fromISO, toISO) {
+  const url = `/api/v1/metrics/daily?device_id=${deviceId}&from=${fromISO}&to=${toISO}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Error cargando daily");
+  return data.days || [];
+}
+
+async function loadDailyChart(monthYYYYMM) {
+  const { from, to } = monthRange(monthYYYYMM);
+  const labels = dateList(from, to);
+
+  // Elegidos: uno o todos
+  const targets = (selectedDeviceId !== null)
+    ? devicesCache.filter(d => d.id === selectedDeviceId)
+    : devicesCache.slice();
+
+  // Si no hay dispositivos, limpiar chart
+  if (!targets.length) {
+    const ctx = document.getElementById("dailyChart").getContext("2d");
+    if (dailyChart) dailyChart.destroy();
+    dailyChart = new Chart(ctx, { type: "line", data: { labels: [], datasets: [] } });
+    return;
+  }
+
+  // Traer daily de todos en paralelo
+  const results = await Promise.all(targets.map(async (dev) => {
+    const days = await fetchDaily(dev.id, from, to);
+    const map = new Map(days.map(x => [x.day, Number(x.energy_kwh || 0)]));
+    const series = labels.map(day => map.has(day) ? map.get(day) : 0);
+    return { label: dev.name, data: series };
+  }));
+
+  const ctx = document.getElementById("dailyChart").getContext("2d");
+  if (dailyChart) dailyChart.destroy();
+
+  dailyChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: results.map(r => ({
+        label: r.label,
+        data: r.data,
+        tension: 0.25
+      }))
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: "index", intersect: false }
+    }
+  });
+}
+
 
 async function loadSummary() {
   const month = document.getElementById("month").value;
@@ -227,8 +310,8 @@ async function loadSummary() {
   const values = (data.devices || []).map(d => Number(d.energy_kwh || 0));
 
   const ctx = document.getElementById("barChart").getContext("2d");
-  if (chart) chart.destroy();
-  chart = new Chart(ctx, {
+  if (monthChart) monthChart.destroy();
+  monthChart = new Chart(ctx, {
     type: "bar",
     data: { labels, datasets: [{ label: "kWh", data: values }] },
     options: { responsive: true }
@@ -239,6 +322,8 @@ async function loadSummary() {
 
   // Marca de tiempo local
   setLastUpdate();
+  //actualizar daily chart
+  await loadDailyChart(month);
 }
 
 document.getElementById("refresh").addEventListener("click", loadSummary);
