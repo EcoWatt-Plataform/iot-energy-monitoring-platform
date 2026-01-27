@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sisterna - Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <main class="container">
+    <header class="row">
+      <h1>Sisterna</h1>
+      <div class="controls">
+        <label>Mes:
+          <input id="month" type="month" />
+        </label>
+        <label>Dispositivo:
+          <select id="deviceSelect">
+            <option value="">Cargando...</option>
+          </select>
+        </label>
+        <button id="refresh">Actualizar</button>
+      </div>
+    </header>
+
+    <!-- NUEVO: Resumen general -->
+    <section class="grid">
+      <div class="card">
+        <h2>Total del mes</h2>
+        <div id="monthTotal" class="big">—</div>
+        <div class="muted" id="monthMeasurements">—</div>
+      </div>
+
+      <div class="card">
+        <h2 id="topTitle">Top consumidor del mes</h2>
+        <div id="topConsumer" class="big">—</div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <h2>Alertas</h2>
+        <ul id="alerts"></ul>
+      </div>
+
+      <div class="card">
+        <h2>Última actualización</h2>
+        <div id="lastUpdate" class="big">—</div>
+        <div class="muted">Se actualiza al apretar “Actualizar”.</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Consumo por dispositivo (kWh) - mes</h2>
+      <canvas id="barChart"></canvas>
+    </section>
+
+    <section class="card">
+      <h2>Consumo diario (kWh/día)</h2>
+      <canvas id="dailyChart"></canvas>
+    </section>
+
+
+    <!-- NUEVO: Tabla por dispositivo -->
+    <section class="card">
+      <h2>Detalle por dispositivo</h2>
+      <div class="tableWrap">
+        <table id="deviceTable">
+          <thead>
+            <tr>
+              <th>Dispositivo</th>
+              <th>kWh (mes)</th>
+              <th>Mediciones</th>
+              <th>Avg Power (W)</th>
+              <th>Max Power (W)</th>
+              <th>Avg Voltage (V)</th>
+              <th>Avg Current (A)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Administrar dispositivos</h2>
+
+      <div class="row" style="margin-bottom: 12px;">
+        <div class="controls">
+          <label>Nombre:
+            <input id="newDeviceName" type="text" placeholder="Ej: Horno Electrico" />
+          </label>
+
+          <label>Threshold (Wh/mes):
+            <input id="newDeviceThreshold" type="number" min="0" step="1" value="5000" />
+          </label>
+
+          <button id="createDeviceBtn">Crear dispositivo</button>
+        </div>
+      </div>
+
+      <div class="tableWrap">
+        <table id="deviceAdminTable">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nombre</th>
+              <th>Threshold (Wh/mes)</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <p class="muted">
+        Nota: la API key se muestra al crear el dispositivo. Guardala (no la subas a GitHub).
+      </p>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
