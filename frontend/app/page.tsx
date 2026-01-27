@@ -59,6 +59,21 @@ export default function HomePage() {
             }}
           >
             Leer más
+            <a
+              href="/dashboard"
+              style={{
+                display: "inline-block",
+                marginLeft: "12px",
+                padding: "10px 12px",
+                borderRadius: "10px",
+                background: "black",
+                color: "white",
+                textDecoration: "none",
+              }}
+            >
+              Abrir dashboard
+            </a>
+
           </a>
         </div>
       </div>
