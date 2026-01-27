@@ -32,10 +32,15 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
   const deviceOptions = useMemo(() => {
     return [{ id: 0, name: "Todos (comparar)" }, ...devices];
   }, [devices]);
+  const csvUrl = useMemo(() => {
+    let u = `/api/v1/export/measurements.csv?month=${encodeURIComponent(month)}`;
+    if (selectedDeviceId !== null) u += `&device_id=${selectedDeviceId}`;
+    return u;
+  }, [month, selectedDeviceId]);
+
 
   async function loadDevices() {
     const res = await fetch("/api/v1/devices");
@@ -116,7 +121,7 @@ export default function DashboardPage() {
                 ))}
               </select>
             </div>
-
+            
             <button
               className="rounded-lg bg-black px-4 py-2 text-white"
               onClick={() => loadSummary()}
@@ -124,6 +129,11 @@ export default function DashboardPage() {
             >
               {loading ? "Cargando..." : "Refrescar"}
             </button>
+
+
+            <a className="rounded-lg border px-4 py-2" href={csvUrl}>
+              Descargar .CSV
+            </a>
           </div>
         </header>
 

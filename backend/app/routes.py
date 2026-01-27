@@ -332,3 +332,100 @@ def metrics_daily():
         "to": date_to,
         "days": days
     })
+
+'---------------------------'
+# EXPORT CSV'
+import io
+import csv
+import calendar
+from flask import Response, request, jsonify
+
+@api_bp.get("/export/measurements.csv")
+def export_measurements_csv():
+    """
+    GET /api/v1/export/measurements.csv?month=YYYY-MM&device_id=1
+
+    - month (YYYY-MM) requerido
+    - device_id opcional (si no, exporta todos)
+    """
+    month = (request.args.get("month") or "").strip()
+    device_id = request.args.get("device_id", type=int)
+
+    if not month or len(month) != 7 or month[4] != "-":
+        return jsonify({"error": "month is required as YYYY-MM"}), 400
+
+    try:
+        y = int(month[:4])
+        m = int(month[5:7])
+        last_day = calendar.monthrange(y, m)[1]
+    except Exception:
+        return jsonify({"error": "invalid month format, expected YYYY-MM"}), 400
+
+    date_from = f"{y:04d}-{m:02d}-01"
+    date_to = f"{y:04d}-{m:02d}-{last_day:02d}"
+
+    with get_con(_db_path()) as con:
+        if device_id:
+            rows = con.execute(
+                """
+                SELECT
+                  m.ts,
+                  m.device_id,
+                  d.name AS device_name,
+                  m.voltage,
+                  m.current,
+                  m.power,
+                  m.energy_wh
+                FROM measurements m
+                JOIN devices d ON d.id = m.device_id
+                WHERE substr(m.ts, 1, 10) >= ?
+                  AND substr(m.ts, 1, 10) <= ?
+                  AND m.device_id = ?
+                ORDER BY m.ts ASC
+                """,
+                (date_from, date_to, device_id),
+            ).fetchall()
+        else:
+            rows = con.execute(
+                """
+                SELECT
+                  m.ts,
+                  m.device_id,
+                  d.name AS device_name,
+                  m.voltage,
+                  m.current,
+                  m.power,
+                  m.energy_wh
+                FROM measurements m
+                JOIN devices d ON d.id = m.device_id
+                WHERE substr(m.ts, 1, 10) >= ?
+                  AND substr(m.ts, 1, 10) <= ?
+                ORDER BY m.ts ASC
+                """,
+                (date_from, date_to),
+            ).fetchall()
+
+    output = io.StringIO()
+    w = csv.writer(output)
+    w.writerow(["ts", "device_id", "device_name", "voltage", "current", "power", "energy_wh"])
+
+    for r in rows:
+        d = dict(r)
+        w.writerow([
+            d.get("ts"),
+            d.get("device_id"),
+            d.get("device_name"),
+            d.get("voltage"),
+            d.get("current"),
+            d.get("power"),
+            d.get("energy_wh"),
+        ])
+
+    filename = f"measurements_{month}"
+    if device_id:
+        filename += f"_device{device_id}"
+    filename += ".csv"
+
+    resp = Response(output.getvalue(), mimetype="text/csv; charset=utf-8")
+    resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
