@@ -363,3 +363,11 @@ document.getElementById("downloadCsv").addEventListener("click", () => {
   if (selectedDeviceId) url += `&device_id=${selectedDeviceId}`;
   window.location.href = url;
 });
+
+document.getElementById("downloadDailyCsv").addEventListener("click", () => {
+  const month = document.getElementById("month").value;
+  let url = `/api/v1/export/daily.csv?month=${encodeURIComponent(month)}`;
+  if (selectedDeviceId) url += `&device_id=${selectedDeviceId}`;
+  window.location.href = url;
+});
+
