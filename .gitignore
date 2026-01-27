@@ -210,3 +210,11 @@ backend/data/
 *.sqlite
 .env
 backend/.venv/
+
+# Frontend (Next)
+node_modules/
+.next/
+out/
+.env.local
+.env
+
