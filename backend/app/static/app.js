@@ -357,3 +357,9 @@ document.getElementById("refresh").addEventListener("click", loadSummary);
   loadSummary();
 })();
 
+document.getElementById("downloadCsv").addEventListener("click", () => {
+  const month = document.getElementById("month").value;
+  let url = `/api/v1/export/measurements.csv?month=${encodeURIComponent(month)}`;
+  if (selectedDeviceId) url += `&device_id=${selectedDeviceId}`;
+  window.location.href = url;
+});
