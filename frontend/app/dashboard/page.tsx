@@ -45,6 +45,11 @@ export default function DashboardPage() {
     if (selectedDeviceId !== null) u += `&device_id=${selectedDeviceId}`;
     return u;
   }, [month, selectedDeviceId]);
+  const alertsCsvUrl = useMemo(() => {
+    let u = `/api/v1/export/alerts.csv?month=${encodeURIComponent(month)}`;
+    if (selectedDeviceId !== null) u += `&device_id=${selectedDeviceId}`;
+    return u;
+  }, [month, selectedDeviceId]);
 
 
 
@@ -143,6 +148,10 @@ export default function DashboardPage() {
 
             <a className="rounded-lg border px-4 py-2" href={dailyCsvUrl}>
               CSV diario
+            </a>
+            
+            <a className="rounded-lg border px-4 py-2" href={alertsCsvUrl}>
+              CSV alertas
             </a>
 
           </div>
