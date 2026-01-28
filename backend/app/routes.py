@@ -433,11 +433,6 @@ def export_measurements_csv():
 '---------------------------'
 # EXPORT DAILY CSV
 
-import io
-import csv
-import calendar
-from flask import Response, request, jsonify
-
 @api_bp.get("/export/daily.csv")
 def export_daily_csv():
     """
@@ -506,6 +501,99 @@ def export_daily_csv():
         w.writerow([d.get("day"), d.get("device_id"), d.get("device_name"), round(kwh, 6)])
 
     filename = f"daily_{month}"
+    if device_id:
+        filename += f"_device{device_id}"
+    filename += ".csv"
+
+    resp = Response(output.getvalue(), mimetype="text/csv; charset=utf-8")
+    resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
+
+'---------------------------'
+# EXPORT ALERTS CSV
+@api_bp.get("/export/alerts.csv")
+def export_alerts_csv():
+    """
+    GET /api/v1/export/alerts.csv?month=YYYY-MM&device_id=1
+    Exporta alertas del mes: dispositivos cuyo consumo mensual supera monthly_threshold_wh.
+    """
+    month = (request.args.get("month") or "").strip()
+    device_id = request.args.get("device_id", type=int)
+
+    if not month or len(month) != 7 or month[4] != "-":
+        return jsonify({"error": "month is required as YYYY-MM"}), 400
+
+    # Consulta robusta: filtra por mes usando substr(ts, 1, 7) = 'YYYY-MM'
+    with get_con(_db_path()) as con:
+        if device_id:
+            rows = con.execute(
+                """
+                SELECT
+                    d.id AS device_id,
+                    d.name AS device_name,
+                    COALESCE(d.monthly_threshold_wh, 0) AS threshold_wh,
+                    COALESCE(SUM(m.energy_wh), 0) AS energy_wh
+                FROM devices d
+                LEFT JOIN measurements m
+                    ON m.device_id = d.id
+                AND substr(m.ts, 1, 7) = ?
+                WHERE d.id = ?
+                GROUP BY d.id, d.name, d.monthly_threshold_wh
+                HAVING COALESCE(SUM(m.energy_wh), 0) > COALESCE(d.monthly_threshold_wh, 0)
+                ORDER BY COALESCE(SUM(m.energy_wh), 0) DESC
+                """,
+                (month, device_id),
+            ).fetchall()
+
+        else:
+            rows = con.execute(
+                """
+                SELECT
+                    d.id AS device_id,
+                    d.name AS device_name,
+                    COALESCE(d.monthly_threshold_wh, 0) AS threshold_wh,
+                    COALESCE(SUM(m.energy_wh), 0) AS energy_wh
+                FROM devices d
+                LEFT JOIN measurements m
+                    ON m.device_id = d.id
+                AND substr(m.ts, 1, 7) = ?
+                    GROUP BY d.id, d.name, d.monthly_threshold_wh
+                HAVING COALESCE(SUM(m.energy_wh), 0) > COALESCE(d.monthly_threshold_wh, 0)
+                ORDER BY COALESCE(SUM(m.energy_wh), 0) DESC
+                """,
+                (month,),
+            ).fetchall()
+
+
+    output = io.StringIO()
+    w = csv.writer(output)
+    w.writerow([
+        "device_id",
+        "device_name",
+        "threshold_wh",
+        "energy_wh",
+        "energy_kwh",
+        "exceed_wh",
+        "exceed_pct",
+    ])
+
+    for r in rows:
+        d = dict(r)
+        thr = float(d.get("threshold_wh") or 0.0)
+        ewh = float(d.get("energy_wh") or 0.0)
+        exceed = max(0.0, ewh - thr)
+        pct = (exceed / thr * 100.0) if thr > 0 else 0.0
+        w.writerow([
+            d.get("device_id"),
+            d.get("device_name"),
+            int(thr),
+            round(ewh, 4),
+            round(ewh / 1000.0, 6),
+            round(exceed, 4),
+            round(pct, 2),
+        ])
+
+    filename = f"alerts_{month}"
     if device_id:
         filename += f"_device{device_id}"
     filename += ".csv"
