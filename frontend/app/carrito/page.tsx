@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 
 type PlanId = "basico" | "avanzado" | "premium";
 
@@ -21,10 +20,18 @@ const PLANES: Record<PlanId, { id: PlanId; nombre: string; precio: number }> = {
   premium: { id: "premium", nombre: "Plan Premium", precio: 4500 },
 };
 
-export default function CarritoPage() {
-  const searchParams = useSearchParams();
-  const planFromUrl = (searchParams.get("plan") || "") as PlanId;
+function getPlanFromUrl(): PlanId | null {
+  // Solo corre en el navegador (Client Component)
+  if (typeof window === "undefined") return null;
 
+  const params = new URLSearchParams(window.location.search);
+  const plan = params.get("plan");
+
+  if (plan === "basico" || plan === "avanzado" || plan === "premium") return plan;
+  return null;
+}
+
+export default function CarritoPage() {
   const [items, setItems] = useState<CartItem[]>([]);
 
   // 1) cargar carrito guardado
@@ -35,12 +42,8 @@ export default function CarritoPage() {
 
   // 2) si viene ?plan=... -> sumar 1 (o agregar si no existe)
   useEffect(() => {
-    const esPlanValido =
-      planFromUrl === "basico" ||
-      planFromUrl === "avanzado" ||
-      planFromUrl === "premium";
-
-    if (!esPlanValido) return;
+    const planFromUrl = getPlanFromUrl();
+    if (!planFromUrl) return;
 
     const raw = localStorage.getItem(STORAGE_KEY);
     const cart: CartItem[] = raw ? JSON.parse(raw) : [];
@@ -60,7 +63,7 @@ export default function CarritoPage() {
 
     setItems(nuevo);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(nuevo));
-  }, [planFromUrl]);
+  }, []);
 
   function guardar(nuevo: CartItem[]) {
     setItems(nuevo);
@@ -82,10 +85,8 @@ export default function CarritoPage() {
 
   function restar(id: PlanId) {
     const nuevo = items
-      .map((x) =>
-        x.id === id ? { ...x, cantidad: x.cantidad - 1 } : x
-      )
-      .filter((x) => x.cantidad > 0); // si llega a 0, lo borra
+      .map((x) => (x.id === id ? { ...x, cantidad: x.cantidad - 1 } : x))
+      .filter((x) => x.cantidad > 0);
     guardar(nuevo);
   }
 
@@ -104,7 +105,9 @@ export default function CarritoPage() {
 
   return (
     <div style={{ padding: "40px", maxWidth: "1100px", margin: "0 auto" }}>
-      <h1 style={{ fontSize: "40px", marginBottom: "10px" }}>Revisá tu carrito</h1>
+      <h1 style={{ fontSize: "40px", marginBottom: "10px" }}>
+        Revisá tu carrito
+      </h1>
       <p style={{ color: "#555", marginTop: 0, marginBottom: "26px" }}>
         Podés ajustar cantidades y ver el subtotal.
       </p>
@@ -187,7 +190,13 @@ export default function CarritoPage() {
                   }}
                 >
                   {/* Plan + borrar */}
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                    }}
+                  >
                     <button
                       type="button"
                       onClick={() => eliminar(item.id)}
@@ -211,7 +220,14 @@ export default function CarritoPage() {
                   <div style={{ textAlign: "right" }}>${item.precio}</div>
 
                   {/* Cantidad */}
-                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "8px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
                     <button
                       type="button"
                       onClick={() => restar(item.id)}
@@ -227,7 +243,9 @@ export default function CarritoPage() {
                       min={1}
                       max={99}
                       value={item.cantidad}
-                      onChange={(e) => setCantidad(item.id, Number(e.target.value))}
+                      onChange={(e) =>
+                        setCantidad(item.id, Number(e.target.value))
+                      }
                       style={{
                         width: "64px",
                         padding: "10px",
@@ -249,13 +267,22 @@ export default function CarritoPage() {
                   </div>
 
                   {/* Subtotal */}
-                  <div style={{ textAlign: "right", fontWeight: 700 }}>${subtotal}</div>
+                  <div style={{ textAlign: "right", fontWeight: 700 }}>
+                    ${subtotal}
+                  </div>
                 </div>
               );
             })}
 
             {/* Acciones abajo */}
-            <div style={{ padding: "14px 16px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <div
+              style={{
+                padding: "14px 16px",
+                display: "flex",
+                gap: "10px",
+                flexWrap: "wrap",
+              }}
+            >
               <a
                 href="/planes"
                 style={{
@@ -295,11 +322,23 @@ export default function CarritoPage() {
               padding: "16px",
             }}
           >
-            <h2 style={{ marginTop: 0, marginBottom: "14px", fontSize: "18px" }}>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: "14px",
+                fontSize: "18px",
+              }}
+            >
               Totales del carrito
             </h2>
 
-            <div style={{ display: "flex", justifyContent: "space-between", color: "#555" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                color: "#555",
+              }}
+            >
               <span>Total parcial</span>
               <span>${totalParcial}</span>
             </div>

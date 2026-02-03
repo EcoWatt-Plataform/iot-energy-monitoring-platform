@@ -70,7 +70,7 @@ export default function PlanPremiumPage() {
             </a>
 
             <a
-              href="/login"
+              href="/carrito?plan=premium"
               style={{
                 display: "inline-block",
                 padding: "10px 12px",
