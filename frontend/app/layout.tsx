@@ -28,7 +28,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         style={{ backgroundColor: "white", color: "black" }}
       >
-        {/* HEADER */}
+        {/* ================= HEADER ================= */}
         <header
           style={{
             backgroundColor: "black",
@@ -39,28 +39,43 @@ export default function RootLayout({
             justifyContent: "space-between",
           }}
         >
-          {/* Izquierda: Logo */}
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <img
-              src="/logo2.jpeg"
-              alt="EcoWatt"
-              style={{ height: "32px", width: "auto" }}
-            />
-            <span style={{ fontWeight: 600, fontSize: "18px" }}>EcoWatt</span>
-          </div>
-
-          {/* Centro: Menú */}
-          <nav style={{ display: "flex", gap: "20px" }}>
-            <a href="/planes" style={{ color: "white", textDecoration: "none" }}>
-              Planes
-            </a>
+          {/* IZQUIERDA: Logo (clickeable) + Menú */}
+          <div style={{ display: "flex", alignItems: "center", gap: "28px" }}>
+            {/* Logo clickeable -> vuelve a Home */}
             <a
-              href="/soporte"
-              style={{ color: "white", textDecoration: "none" }}
+              href="/"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                textDecoration: "none",
+                color: "white",
+              }}
             >
-              Soporte
+              <img
+                src="/logo2.jpeg"
+                alt="EcoWatt"
+                style={{ height: "32px", width: "auto" }}
+              />
+              <span style={{ fontWeight: 600, fontSize: "18px" }}>EcoWatt</span>
             </a>
-          </nav>
+
+            {/* Menú al lado del logo */}
+            <nav style={{ display: "flex", gap: "20px" }}>
+              <a
+                href="/planes"
+                style={{ color: "white", textDecoration: "none" }}
+              >
+                Planes
+              </a>
+              <a
+                href="/soporte"
+                style={{ color: "white", textDecoration: "none" }}
+              >
+                Soporte
+              </a>
+            </nav>
+          </div>
 
           {/* Derecha: Login */}
           <div>
@@ -79,7 +94,7 @@ export default function RootLayout({
           </div>
         </header>
 
-        {/* ACÁ SE RENDERIZA LA PÁGINA */}
+        {/* ================= CONTENIDO ================= */}
         {children}
 
         {/* ================= FOOTER ================= */}
@@ -148,7 +163,7 @@ export default function RootLayout({
               gap: "10px",
             }}
           >
-            <span>© 2026 EcoWatt. Todos los derechos reservados.</span>
+            <span>©️ 2026 EcoWatt. Todos los derechos reservados.</span>
             <span>Monitoreo inteligente del consumo energético</span>
           </div>
         </footer>

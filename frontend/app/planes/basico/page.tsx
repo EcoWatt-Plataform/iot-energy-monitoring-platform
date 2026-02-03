@@ -69,7 +69,7 @@ export default function PlanBasicoPage() {
             </a>
 
             <a
-              href="/carrito"
+              href="/carrito?plan=basico"
               style={{
                 display: "inline-block",
                 padding: "10px 12px",

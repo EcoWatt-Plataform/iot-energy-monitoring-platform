@@ -11,7 +11,7 @@ export default function PlanAvanzadoPage() {
         }}
       >
         <img
-          src="/basico.jpeg" // <-- si tu archivo es .jpg o .jpeg, cambialo acá
+          src="/basico.jpeg"
           alt="Plan Básico EcoWatt"
           style={{
             width: "100%",
@@ -69,7 +69,7 @@ export default function PlanAvanzadoPage() {
             </a>
 
             <a
-              href="/login"
+              href="/carrito?plan=avanzado"
               style={{
                 display: "inline-block",
                 padding: "10px 12px",
