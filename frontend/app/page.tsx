@@ -110,150 +110,20 @@ export default function HomePage() {
             {current.subtitle}
           </p>
 
-          <div style={{ marginTop: "22px", display: "flex", gap: "12px", flexWrap: "wrap" }}>
-            <a
-              href={current.primaryCta.href}
-              style={{
-                display: "inline-block",
-                padding: "12px 16px",
-                borderRadius: "12px",
-                textDecoration: "none",
-                color: "white",
-                background: "linear-gradient(90deg, #6992eb, #9b6ceb)",
-                fontWeight: 700,
-              }}
-            >
-              {current.primaryCta.label}
-            </a>
-
-            {current.secondaryCta ? (
-              <a
-                href={current.secondaryCta.href}
-                style={{
-                  display: "inline-block",
-                  padding: "12px 16px",
-                  borderRadius: "12px",
-                  textDecoration: "none",
-                  color: "white",
-                  background: "linear-gradient(90deg, #6992eb, #9b6ceb)",
-                  border: "1px solid rgba(0,0,0,0.15)",
-                  fontWeight: 700,
-                }}
-              >
-                {current.secondaryCta.label}
-              </a>
-            ) : null}
-          </div>
-        </div>
-
-        {/* Flechas */}
-        <button
-          type="button"
-          onClick={prev}
-          aria-label="Anterior"
-          style={arrowBtn("left")}
-        >
-          ‹
-        </button>
-
-        <button
-          type="button"
-          onClick={next}
-          aria-label="Siguiente"
-          style={arrowBtn("right")}
-        >
-          ›
-        </button>
-
-        {/* Dots */}
-        <div
-          style={{
-            position: "absolute",
-            left: "50%",
-            bottom: "18px",
-            transform: "translateX(-50%)",
-            display: "flex",
-            gap: "10px",
-          }}
-        >
-          {slides.map((s, i) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setIndex(i)}
-              aria-label={`Ir al slide ${s.id}`}
-              style={{
-                width: i === index ? "26px" : "10px",
-                height: "10px",
-                borderRadius: "999px",
-                border: "none",
-                cursor: "pointer",
-                backgroundColor: i === index ? "rgba(0,0,0,0.75)" : "rgba(0,0,0,0.25)",
-                transition: "all 160ms ease",
-              }}
-            />
-          ))}
-        </div>
-      </section>
-
-      {/* ================= CONTENIDO ABAJO (lo que ya hiciste) ================= */}
-      <div style={{ padding: "40px" }}>
-        {/* SECCIÓN: COMO FUNCIONA */}
-        <div style={{ marginTop: "70px" }}>
-          <h2 style={{ fontSize: "34px", textAlign: "center", marginBottom: "10px" }}>
-            Cómo funciona
-          </h2>
-
-          {/* Línea degradé */}
-          <div
+          <a
+            href="/producto"
             style={{
-              width: "110px",
-              height: "6px",
-              margin: "14px auto 12px",
-              borderRadius: "999px",
-              background: "linear-gradient(90deg, transparent, #6992eb, #9b6ceb, transparent)",
-              filter: "blur(0.2px)",
-            }}
-          />
-
-          <p style={{ textAlign: "center", color: "#666", marginTop: 0, marginBottom: "28px" }}>
-            Solo 3 pasos para empezar a ahorrar energía.
-          </p>
-
-          <div
-            style={{
-              display: "flex",
-              gap: "20px",
-              justifyContent: "center",
-              flexWrap: "wrap",
-              alignItems: "center",
+              display: "inline-block",
+              padding: "10px 12px",
+              borderRadius: "10px",
+              background: "linear-gradient(90deg, #6992eb, #9b6ceb)",
+              color: "black",
+              textDecoration: "none",
             }}
           >
-            <StepCard
-              title="Conectá el dispositivo"
-              img="/conecta.jpeg"
-              alt="Conectá el dispositivo"
-              text="Conectá EcoWatt al enchufe del equipo que querés monitorear."
-            />
-
-            <ArrowBetween />
-
-            <StepCard
-              title="Medí en tiempo real"
-              img="/medicion.jpeg"
-              alt="Medición de consumo"
-              text="Visualizá cuánta energía consume cada dispositivo."
-            />
-
-            <ArrowBetween />
-
-            <StepCard
-              title="Analizá y ahorrá"
-              img="/analiza.jpeg"
-              alt="Analizá y ahorrá"
-              text="Consultá históricos y tomá decisiones para reducir tu consumo."
-            />
-          </div>
+            Leer más
+          </a>
+          
         </div>
       </div>
     </div>

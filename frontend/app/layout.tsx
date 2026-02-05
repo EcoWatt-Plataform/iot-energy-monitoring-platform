@@ -32,9 +32,41 @@ export default function RootLayout({
         {/* HEADER NUEVO (estilo Rivian) */}
         <Header />
 
-        {/* IMPORTANTE:
-            como el header es fixed, agregamos padding-top para que no tape el contenido */}
-        <div style={{ paddingTop: "84px" }}>{children}</div>
+          {/* Derecha: Login */}
+          <div>
+            <a
+            href="/dashboard"
+            style={{
+              display: "inline-block",
+              border: "1px solid white",
+              marginLeft: "12px",
+              marginRight: "12px",
+              padding: "10px 12px",
+              borderRadius: "12px",
+              background: "black",
+              color: "white",
+              textDecoration: "none",
+            }}
+          >
+            Ver dashboard de prueba para testing          
+          </a>
+            <a
+              href="/login"
+              style={{
+                color: "white",
+                textDecoration: "none",
+                border: "1px solid white",
+                padding: "6px 12px",
+                borderRadius: "8px",
+              }}
+            >
+              Iniciar sesión
+            </a>
+          </div>
+        </header>
+
+        {/* ================= CONTENIDO ================= */}
+        {children}
 
         {/* ================= FOOTER ================= */}
         <footer
