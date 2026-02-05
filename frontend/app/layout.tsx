@@ -80,6 +80,22 @@ export default function RootLayout({
           {/* Derecha: Login */}
           <div>
             <a
+            href="/dashboard"
+            style={{
+              display: "inline-block",
+              border: "1px solid white",
+              marginLeft: "12px",
+              marginRight: "12px",
+              padding: "10px 12px",
+              borderRadius: "12px",
+              background: "black",
+              color: "white",
+              textDecoration: "none",
+            }}
+          >
+            Ver dashboard de prueba para testing          
+          </a>
+            <a
               href="/login"
               style={{
                 color: "white",
