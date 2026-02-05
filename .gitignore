@@ -224,3 +224,5 @@ node_modules/.next/
 out/
 .env.local
 
+# ESP32 local secrets
+hardware/esp32/micropython/config_local.py

@@ -1,23 +1,25 @@
-import network, time
+import time
+import network
+from machine import I2C, Pin
 import ujson
 import urequests
-from machine import I2C, Pin
 
-# --- WIFI / API ---
+# ---------------- CONFIG ----------------
 try:
-from config_local import SSID, PASS, API_KEY, PC_IP
+    from config_local import SSID, PASS, PC_IP, API_KEY, I2C_ADDR, R_SHUNT_OHMS, INTERVAL_S
 except ImportError:
-    SSID="TU_WIFI"
-    PASS="TU_PASS"
-    API_KEY="API_KEY"
-    PC_IP="192.168.X.Y"
+    # Fallback seguro para commitear (sin secretos reales)
+    SSID = "TU_WIFI"
+    PASS = "TU_PASSWORD"
+    PC_IP = "192.168.X.Y"
+    API_KEY = "TU_API_KEY_COMPLETA"
+    I2C_ADDR = 0x41
+    R_SHUNT_OHMS = 0.10
+    INTERVAL_S = 2
+
 URL = "http://%s:5000/api/v1/measurements" % PC_IP
 
-
-# --- INA219 ---
-I2C_ADDR = 0x41
-R_SHUNT_OHMS = 0.10  # R100=0.10, R010=0.01
-
+# ---------------- INA219 ----------------
 REG_CONFIG  = 0x00
 REG_SHUNT_V = 0x01
 REG_BUS_V   = 0x02
@@ -49,6 +51,7 @@ def ina_read():
     power_w   = bus_v * current_a
     return bus_v, current_a, power_w
 
+# ---------------- WIFI + POST ----------------
 def wifi_connect():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
@@ -70,28 +73,27 @@ def post_measurement(v, i, p, e_wh):
         "power": round(p, 3),
         "energy_wh": round(e_wh, 6),
     }
-    headers = {"Content-Type":"application/json", "X-API-Key": API_KEY}
+    headers = {"Content-Type": "application/json", "X-API-Key": API_KEY}
     r = urequests.post(URL, data=ujson.dumps(payload), headers=headers)
     try:
         print("HTTP", r.status_code, r.text)
     finally:
         r.close()
 
-# --- MAIN ---
+# ---------------- MAIN ----------------
 wifi_connect()
 ina_init()
 
-INTERVAL_S = 2
 last_ms = time.ticks_ms()
 
 while True:
     now_ms = time.ticks_ms()
-    dt_s = time.ticks_diff(now_ms, last_ms) / 1000
+    dt_s = time.ticks_diff(now_ms, last_ms) / 1000.0
     last_ms = now_ms
 
     try:
         v, i, p = ina_read()
-        e_wh = p * (dt_s / 3600.0)  # incremental
+        e_wh = p * (dt_s / 3600.0)  # energía incremental
         print("V/I/P:", v, i, p, "E_wh:", e_wh)
         post_measurement(v, i, p, e_wh)
     except Exception as e:
