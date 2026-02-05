@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import Header from "./components/header";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,74 +29,12 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         style={{ backgroundColor: "white", color: "black" }}
       >
-        {/* ================= HEADER ================= */}
-        <header
-          style={{
-            backgroundColor: "black",
-            color: "white",
-            padding: "14px 24px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          {/* IZQUIERDA: Logo (clickeable) + Menú */}
-          <div style={{ display: "flex", alignItems: "center", gap: "28px" }}>
-            {/* Logo clickeable -> vuelve a Home */}
-            <a
-              href="/"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                textDecoration: "none",
-                color: "white",
-              }}
-            >
-              <img
-                src="/logo2.jpeg"
-                alt="EcoWatt"
-                style={{ height: "32px", width: "auto" }}
-              />
-              <span style={{ fontWeight: 600, fontSize: "18px" }}>EcoWatt</span>
-            </a>
+        {/* HEADER NUEVO (estilo Rivian) */}
+        <Header />
 
-            {/* Menú al lado del logo */}
-            <nav style={{ display: "flex", gap: "20px" }}>
-              <a
-                href="/planes"
-                style={{ color: "white", textDecoration: "none" }}
-              >
-                Planes
-              </a>
-              <a
-                href="/soporte"
-                style={{ color: "white", textDecoration: "none" }}
-              >
-                Soporte
-              </a>
-            </nav>
-          </div>
-
-          {/* Derecha: Login */}
-          <div>
-            <a
-              href="/login"
-              style={{
-                color: "white",
-                textDecoration: "none",
-                border: "1px solid white",
-                padding: "6px 12px",
-                borderRadius: "8px",
-              }}
-            >
-              Iniciar sesión
-            </a>
-          </div>
-        </header>
-
-        {/* ================= CONTENIDO ================= */}
-        {children}
+        {/* IMPORTANTE:
+            como el header es fixed, agregamos padding-top para que no tape el contenido */}
+        <div style={{ paddingTop: "84px" }}>{children}</div>
 
         {/* ================= FOOTER ================= */}
         <footer
@@ -119,30 +58,23 @@ export default function RootLayout({
             }}
           >
             {/* Logo */}
-            <img
-              src="/logo2.jpeg"
-              alt="EcoWatt"
-              style={{ height: "28px", width: "auto" }}
-            />
+            <a href="/" style={{ display: "flex", alignItems: "center" }}>
+              <img
+                src="/logo4.PNG"
+                alt="EcoWatt"
+                style={{ height: "28px", width: "auto" }}
+              />
+            </a>
 
             {/* Links */}
             <div style={{ display: "flex", gap: "18px", flexWrap: "wrap" }}>
-              <a
-                href="/producto"
-                style={{ color: "white", textDecoration: "none" }}
-              >
+              <a href="/producto" style={{ color: "white", textDecoration: "none" }}>
                 Producto
               </a>
-              <a
-                href="/planes"
-                style={{ color: "white", textDecoration: "none" }}
-              >
+              <a href="/planes" style={{ color: "white", textDecoration: "none" }}>
                 Planes
               </a>
-              <a
-                href="/soporte"
-                style={{ color: "white", textDecoration: "none" }}
-              >
+              <a href="/soporte" style={{ color: "white", textDecoration: "none" }}>
                 Soporte
               </a>
             </div>
