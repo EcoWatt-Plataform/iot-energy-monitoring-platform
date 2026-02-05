@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 
-const HERO_IMG = "/banner1.jpeg"; 
+const HERO_IMG = "/banner1.jpeg";
 
 type Slide = {
   id: number;
@@ -10,8 +10,6 @@ type Slide = {
   subtitle: string;
   primaryCta: { label: string; href: string };
   secondaryCta?: { label: string; href: string };
-  showGraphs?: boolean;
-  graphs?: { src: string; style?: React.CSSProperties }[];
 };
 
 export default function HomePage() {
@@ -22,24 +20,19 @@ export default function HomePage() {
         title: "Te ayudamos a entender y ahorrar",
         subtitle: "Realizá un seguimiento del consumo energético.",
         primaryCta: { label: "Leer más", href: "/producto" },
-        showGraphs: false,
       },
       {
         id: 2,
-        title: "Ahorrá más con el Plan Premium",
-        subtitle:
-          "Accedé a análisis avanzados, alertas y comparaciones para optimizar tu consumo.",
-        primaryCta: { label: "Ver plan", href: "/planes/premium" },
-        showGraphs: true,
+        title: "Históricos claros y alertas inteligentes",
+        subtitle: "Compará días, semanas y meses y detectá consumos anómalos a tiempo.",
+        primaryCta: { label: "Abrir dashboard", href: "/dashboard" },
+        secondaryCta: { label: "Ver planes", href: "/planes" },
       },
       {
         id: 3,
-        title: "Históricos claros y alertas inteligentes",
-        subtitle:
-          "Compará días, semanas y meses y detectá consumos anómalos a tiempo.",
-        primaryCta: { label: "Abrir dashboard", href: "/dashboard" },
-        secondaryCta: { label: "Ver planes", href: "/planes" },
-        showGraphs: true,
+        title: "Ahorrá más con el Plan Premium",
+        subtitle: "Accedé a análisis avanzados, alertas y comparaciones para optimizar tu consumo.",
+        primaryCta: { label: "Ver plan", href: "/planes/premium" },
       },
     ],
     []
@@ -62,6 +55,7 @@ export default function HomePage() {
       <section
         style={{
           position: "relative",
+          borderRadius: "24px",
           height: "calc(100vh + 64px)",
           width: "100%",
           overflow: "hidden",
@@ -81,13 +75,13 @@ export default function HomePage() {
           }}
         />
 
-        {/* Capa opcional para mejorar lectura del texto (muy suave) */}
+        {/* Overlay suave para que el texto se lea */}
         <div
           style={{
             position: "absolute",
             inset: 0,
             background:
-              "linear-gradient(90deg, rgba(0,0,0,0.00) 20%, rgba(0,0,0,0.06) 60%, rgba(0,0,0,0.10) 100%)",
+              "linear-gradient(90deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.08) 40%, rgba(0,0,0,0.25) 100%)",
           }}
         />
 
@@ -98,7 +92,7 @@ export default function HomePage() {
             right: "6%",
             top: "50%",
             transform: "translateY(-50%)",
-            width: "min(520px, 92%)",
+            width: "min(560px, 92%)",
             color: "white",
           }}
         >
@@ -110,22 +104,139 @@ export default function HomePage() {
             {current.subtitle}
           </p>
 
-          <a
-            href="/producto"
-            style={{
-              display: "inline-block",
-              padding: "10px 12px",
-              borderRadius: "10px",
-              background: "linear-gradient(90deg, #6992eb, #9b6ceb)",
-              color: "black",
-              textDecoration: "none",
-            }}
-          >
-            Leer más
-          </a>
-          
+          <div style={{ marginTop: "22px", display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            <a
+              href={current.primaryCta.href}
+              style={{
+                display: "inline-block",
+                padding: "12px 16px",
+                borderRadius: "12px",
+                textDecoration: "none",
+                color: "white",
+                background: "linear-gradient(90deg, #6992eb, #9b6ceb)",
+                fontWeight: 700,
+              }}
+            >
+              {current.primaryCta.label}
+            </a>
+
+            {current.secondaryCta ? (
+              <a
+                href={current.secondaryCta.href}
+                style={{
+                  display: "inline-block",
+                  padding: "12px 16px",
+                  borderRadius: "12px",
+                  textDecoration: "none",
+                  color: "white",
+                  border: "1px solid rgba(255,255,255,0.6)",
+                  background: "rgba(0,0,0,0.25)",
+                  fontWeight: 700,
+                }}
+              >
+                {current.secondaryCta.label}
+              </a>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Flechas */}
+        <button type="button" onClick={prev} aria-label="Anterior" style={arrowBtn("left")}>
+          ‹
+        </button>
+        <button type="button" onClick={next} aria-label="Siguiente" style={arrowBtn("right")}>
+          ›
+        </button>
+
+        {/* Dots */}
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            bottom: "18px",
+            transform: "translateX(-50%)",
+            display: "flex",
+            gap: "10px",
+          }}
+        >
+          {slides.map((s, i) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setIndex(i)}
+              aria-label={`Ir al slide ${s.id}`}
+              style={{
+                width: i === index ? "26px" : "10px",
+                height: "10px",
+                borderRadius: "999px",
+                border: "none",
+                cursor: "pointer",
+                backgroundColor: i === index ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.35)",
+                transition: "all 160ms ease",
+              }}
+            />
+          ))}
         </div>
       </section>
+
+      {/* ================= CONTENIDO ABAJO ================= */}
+      <div style={{ padding: "40px" }}>
+        <div style={{ marginTop: "70px" }}>
+          <h2 style={{ fontSize: "34px", textAlign: "center", marginBottom: "10px" }}>
+            Cómo funciona
+          </h2>
+
+          <div
+            style={{
+              width: "110px",
+              height: "6px",
+              margin: "14px auto 12px",
+              borderRadius: "999px",
+              background: "linear-gradient(90deg, transparent, #6992eb, #9b6ceb, transparent)",
+              filter: "blur(0.2px)",
+            }}
+          />
+
+          <p style={{ textAlign: "center", color: "#666", marginTop: 0, marginBottom: "28px" }}>
+            Solo 3 pasos para empezar a ahorrar energía.
+          </p>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "20px",
+              justifyContent: "center",
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
+            <StepCard
+              title="Conectá el dispositivo"
+              img="/conecta.jpeg"
+              alt="Conectá el dispositivo"
+              text="Conectá EcoWatt al enchufe del equipo que querés monitorear."
+            />
+
+            <ArrowBetween />
+
+            <StepCard
+              title="Medí en tiempo real"
+              img="/medicion.jpeg"
+              alt="Medición de consumo"
+              text="Visualizá cuánta energía consume cada dispositivo."
+            />
+
+            <ArrowBetween />
+
+            <StepCard
+              title="Analizá y ahorrá"
+              img="/analiza.jpeg"
+              alt="Analizá y ahorrá"
+              text="Consultá históricos y tomá decisiones para reducir tu consumo."
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -176,7 +287,7 @@ function ArrowBetween() {
         padding: "0 6px",
       }}
     >
-    &gt;
+      &gt;
     </div>
   );
 }
@@ -190,8 +301,9 @@ function arrowBtn(side: "left" | "right"): React.CSSProperties {
     width: "46px",
     height: "46px",
     borderRadius: "999px",
-    border: "1px solid rgba(0,0,0,0.15)",
-    background: "rgba(255,255,255,0.65)",
+    border: "1px solid rgba(255,255,255,0.25)",
+    background: "rgba(0,0,0,0.25)",
+    color: "white",
     cursor: "pointer",
     fontSize: "34px",
     lineHeight: "40px",
