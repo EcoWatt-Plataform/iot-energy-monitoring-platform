@@ -8,17 +8,25 @@ export default function Header() {
   const pathname = usePathname();
   const isHome = pathname === "/";
 
-  const [isHovered, setIsHovered] = useState(false); //true cuando el mouse esta encima del header
-  const [isScrolled, setIsScrolled] = useState(false); //true cuando se hizo scroll hacia abajo
+  // true cuando el mouse está encima del header
+  const [isHovered, setIsHovered] = useState(false);
+
+  // true cuando se hizo scroll hacia abajo
+  const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
+    if(!isHome){
+        setIsHovered
+        setIsScrolled(true);
+        return;
+    }
     function onScroll() {
       setIsScrolled(window.scrollY > 10);
     }
     onScroll();
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [isHome]);
 
   // En Home: transparente al inicio. En otras páginas: fondo blanco siempre
   const shouldShowWhiteBar = !isHome || isHovered || isScrolled;
@@ -39,7 +47,6 @@ export default function Header() {
     backgroundColor: shouldShowWhiteBar ? "rgba(255,255,255,0.92)" : "transparent",
     backdropFilter: shouldShowWhiteBar ? "blur(8px)" : "none",
     WebkitBackdropFilter: shouldShowWhiteBar ? "blur(8px)" : "none",
-    //borderBottom: shouldShowWhiteBar ? "1px solid rgba(0,0,0,0.08)" : "1px solid transparent",
     border: shouldShowWhiteBar ? "1px solid rgba(0,0,0,0.08)" : "1px solid transparent",
     boxShadow: shouldShowWhiteBar ? "0 10px 30px rgba(0,0,0,0.12)" : "none",
   };
@@ -58,7 +65,9 @@ export default function Header() {
   const rightBtnStyle: React.CSSProperties = {
     color: textColor,
     textDecoration: "none",
-    border: `1px solid ${shouldShowWhiteBar ? "rgba(0,0,0,0.25)" : "rgba(255,255,255,0.65)"}`,
+    border: `1px solid ${
+      shouldShowWhiteBar ? "rgba(0,0,0,0.25)" : "rgba(255,255,255,0.65)"
+    }`,
     padding: "8px 12px",
     borderRadius: "10px",
     transition: "all 160ms ease",
@@ -68,17 +77,24 @@ export default function Header() {
   return (
     <header
       style={headerStyle}
-      onMouseEnter={ isHome ? () => setIsHovered(true) : undefined}
-      onMouseLeave={ isHome ? () => setIsHovered(false) : undefined}
+      onMouseEnter={isHome ? () => setIsHovered(true) : undefined}
+      onMouseLeave={isHome ? () => setIsHovered(false) : undefined}
     >
       {/* Izquierda: Logo + menú pegado al logo */}
       <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
         <Link
           href="/"
-          style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none" }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            textDecoration: "none",
+          }}
         >
           <img src="/logo4.PNG" alt="EcoWatt" style={{ height: "30px", width: "auto" }} />
-          <span style={{ color: textColor, fontWeight: 700, fontSize: "16px" }}>EcoWatt</span>
+          <span style={{ color: textColor, fontWeight: 700, fontSize: "16px" }}>
+            EcoWatt
+          </span>
         </Link>
 
         <nav style={{ display: "flex", gap: "6px" }}>
@@ -92,9 +108,21 @@ export default function Header() {
       </div>
 
       {/* Derecha: Carrito + Login */}
-      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px" }}>
-        <Link href="/carrito" style={rightBtnStyle} aria-label="Ir al carrito" title="Carrito">
-          carrito
+      <div
+        style={{
+          marginLeft: "auto",
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+        }}
+      >
+        <Link
+          href="/carrito"
+          style={rightBtnStyle}
+          aria-label="Ir al carrito"
+          title="Carrito"
+        >
+          Carrito
         </Link>
 
         <Link href="/login" style={rightBtnStyle}>
