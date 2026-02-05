@@ -224,6 +224,7 @@ node_modules/.next/
 out/
 .env.local
 
+<<<<<<< HEAD
 # Node / Next
 node_modules/
 .next/
@@ -236,3 +237,7 @@ pnpm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+=======
+# ESP32 local secrets
+hardware/esp32/micropython/config_local.py
+>>>>>>> 8b191a02ede72948e0e0be4c95183485de492998
