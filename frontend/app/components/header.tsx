@@ -59,6 +59,13 @@ export default function Header() {
     fontWeight: 500,
   };
 
+  const buttonStyle: React.CSSProperties = {
+    ...rightBtnStyle,
+    background: "transparent",
+    cursor: "pointer",
+    font: "inherit",
+  };
+
   const supabase = createClient();
 
   const login = async () => {
@@ -122,7 +129,7 @@ export default function Header() {
           Carrito
         </Link>
         
-        <button type="button" onClick={login} style={rightBtnStyle}>
+        <button type="button" onClick={login} style={buttonStyle}>
           Ingresar con Google
         </button>
       </div>
