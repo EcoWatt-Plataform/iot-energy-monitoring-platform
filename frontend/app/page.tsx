@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 const HERO_IMG = "/banner1.jpeg";
 
 type Slide = {

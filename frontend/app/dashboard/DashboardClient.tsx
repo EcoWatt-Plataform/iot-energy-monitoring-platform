@@ -1,34 +1,7 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Tooltip,
-  Legend,
-  Title,
-} from "chart.js";
-import { Line, Bar } from "react-chartjs-2";
+import { useEffect, useState } from "react";
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Tooltip,
-  Legend,
-  Title
-);
-
-// =====================
-// Types / helpers (FUERA del componente)
-// =====================
-type Plan = "basico" | "avanzado" | "premium";
 type Device = { id: number; name: string };
 type DailyPoint = { date: string; kwh: number };
 type SummaryDevice = { id: number; name: string; energy_kwh: number };
@@ -43,27 +16,10 @@ type SummaryResponse = {
   alerts?: { device_name: string; energy_wh: number; threshold_wh: number }[];
 };
 
-type Period = "daily" | "weekly" | "monthly" | "compare";
-
 function toYYYYMM(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   return `${y}-${m}`;
-}
-
-function startOfWeekLabel(isoDate: string) {
-  return `Semana de ${isoDate}`;
-}
-
-const PALETTE = ["#6992EB", "#9B6CEB", "#22C55E", "#F59E0B", "#EF4444", "#14B8A6", "#A855F7"];
-function colorForIndex(i: number) {
-  return PALETTE[i % PALETTE.length];
-}
-function withAlpha(hex: string, alpha: number) {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 function parseDailyCsv(text: string): DailyPoint[] {
@@ -93,39 +49,17 @@ function parseDailyCsv(text: string): DailyPoint[] {
   return out;
 }
 
-function groupWeekly(points: DailyPoint[]) {
-  const out: { label: string; value: number }[] = [];
-  for (let i = 0; i < points.length; i += 7) {
-    const chunk = points.slice(i, i + 7);
-    const sum = chunk.reduce((acc, p) => acc + (Number(p.kwh) || 0), 0);
-    const label = chunk[0]?.date ? startOfWeekLabel(chunk[0].date) : `Semana ${out.length + 1}`;
-    out.push({ label, value: sum });
-  }
-  return out;
-}
-function sumMonthly(points: DailyPoint[]) {
-  return points.reduce((acc, p) => acc + (Number(p.kwh) || 0), 0);
-}
-
-// =====================
-// Component (SOLO 1 export default)
-// =====================
 export default function DashboardClient() {
-  const [plan, setPlan] = useState<Plan>("basico");
   const [devices, setDevices] = useState<Device[]>([]);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null);
-  const [month, setMonth] = useState<string>(toYYYYMM(new Date()));
+  const [selectedDeviceId] = useState<number | null>(null);
+  const [month] = useState<string>(toYYYYMM(new Date()));
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
 
-  const [daily, setDaily] = useState<DailyPoint[]>([]);
-  const [dailyByDevice, setDailyByDevice] = useState<Record<number, DailyPoint[]>>({});
+  const [, setDaily] = useState<DailyPoint[]>([]);
+  const [, setDailyByDevice] = useState<Record<number, DailyPoint[]>>({});
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
-  const [period, setPeriod] = useState<Period>("daily");
-
-  const deviceOptions = useMemo(() => [{ id: 0, name: "Todos (comparar)" }, ...devices], [devices]);
 
   async function loadDevices() {
     const res = await fetch("/api/v1/devices");
@@ -182,15 +116,15 @@ export default function DashboardClient() {
     try {
       await loadSummary(month, selectedDeviceId);
       await loadDaily(month, selectedDeviceId);
-    } catch (e: any) {
-      setErr(e?.message || "Error");
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Error");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadDevices().catch((e: any) => setErr(e?.message || "Error"));
+    loadDevices().catch((e: unknown) => setErr(e instanceof Error ? e.message : "Error"));
   }, []);
 
   useEffect(() => {
@@ -198,17 +132,11 @@ export default function DashboardClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month, selectedDeviceId, devices.length]);
 
-  const compare = useMemo(() => {
-    const list = summary?.devices || [];
-    return list.map((d) => ({ label: d.name, value: Number(d.energy_kwh || 0) }));
-  }, [summary]);
-
-  // … acá pegá el resto de tus useMemo de charts + JSX (tal cual) …
   return (
     <div style={{ padding: 24 }}>
       <h1>Dashboard</h1>
       {err && <pre>{err}</pre>}
-      {/* Pegá tu UI completa acá */}
+      {summary && <p>Mes actual: {summary.month}</p>}
       <button onClick={refreshAll} disabled={loading}>
         {loading ? "Cargando..." : "Refrescar"}
       </button>

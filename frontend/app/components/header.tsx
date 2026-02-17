@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -12,25 +12,9 @@ export default function Header() {
   // true cuando el mouse está encima del header
   const [isHovered, setIsHovered] = useState(false);
 
-  // true cuando se hizo scroll hacia abajo
-  const [isScrolled, setIsScrolled] = useState(false);
-
-  useEffect(() => {
-    if(!isHome){
-        setIsHovered
-        setIsScrolled(true);
-        return;
-    }
-    function onScroll() {
-      setIsScrolled(window.scrollY > 10);
-    }
-    onScroll();
-    window.addEventListener("scroll", onScroll);
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [isHome]);
-
-  // En Home: transparente al inicio. En otras páginas: fondo blanco siempre
-  const shouldShowWhiteBar = !isHome || isHovered || isScrolled;
+  // En Home: transparente al inicio y cambia con hover.
+  // En otras páginas: fondo blanco siempre.
+  const shouldShowWhiteBar = !isHome || isHovered;
 
   const headerStyle: React.CSSProperties = {
     position: "fixed",
@@ -138,12 +122,9 @@ export default function Header() {
           Carrito
         </Link>
         
-        <Link href="/login" style={rightBtnStyle}>
-          <main style={{ padding: 24 }}>
-            <h1>IoT Energy Monitoring</h1>
-            <button onClick={login}>Ingresar con Google</button>
-          </main>
-        </Link>
+        <button type="button" onClick={login} style={rightBtnStyle}>
+          Ingresar con Google
+        </button>
       </div>
     </header>
   );

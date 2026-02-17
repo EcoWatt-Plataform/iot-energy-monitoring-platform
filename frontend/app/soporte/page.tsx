@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 export default function SoportePage() {
@@ -176,7 +177,7 @@ export default function SoportePage() {
 
       {/* Botón volver */}
       <div style={{ marginTop: "44px", textAlign: "center" }}>
-        <a
+        <Link
           href="/"
           style={{
             display: "inline-block",
@@ -188,7 +189,7 @@ export default function SoportePage() {
           }}
         >
           Volver al inicio
-        </a>
+        </Link>
       </div>
     </div>
   );
