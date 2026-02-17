@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 export default function Header() {
   const pathname = usePathname();
@@ -74,6 +75,18 @@ export default function Header() {
     fontWeight: 500,
   };
 
+  const supabase = createClient();
+
+  const login = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+      },
+    });
+  };
+
+
   return (
     <header
       style={headerStyle}
@@ -124,9 +137,12 @@ export default function Header() {
         >
           Carrito
         </Link>
-
+        
         <Link href="/login" style={rightBtnStyle}>
-          Iniciar sesión
+          <main style={{ padding: 24 }}>
+            <h1>IoT Energy Monitoring</h1>
+            <button onClick={login}>Ingresar con Google</button>
+          </main>
         </Link>
       </div>
     </header>
