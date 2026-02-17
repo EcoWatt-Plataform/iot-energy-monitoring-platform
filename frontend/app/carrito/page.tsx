@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type PlanId = "basico" | "avanzado" | "premium";
 
@@ -36,23 +36,40 @@ export default function CarritoPage() {
     if (typeof window === "undefined") return [];
 
     const raw = localStorage.getItem(STORAGE_KEY);
-    const cart: CartItem[] = raw ? JSON.parse(raw) : [];
-    const planFromUrl = getPlanFromUrl();
+    let cart: CartItem[] = [];
+    try {
+      cart = raw ? JSON.parse(raw) : [];
+    } catch {
+      // Invalid JSON in storage, start fresh
+      cart = [];
+    }
 
+    const planFromUrl = getPlanFromUrl();
     if (!planFromUrl) return cart;
 
     const plan = PLANES[planFromUrl];
     const existe = cart.some((item) => item.id === plan.id);
 
-    const nuevo = existe
+    return existe
       ? cart.map((item) =>
           item.id === plan.id ? { ...item, cantidad: item.cantidad + 1 } : item
         )
       : [...cart, { ...plan, cantidad: 1 }];
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(nuevo));
-    return nuevo;
   });
+
+  // Persist the initial cart update from URL to localStorage
+  useEffect(() => {
+    const planFromUrl = getPlanFromUrl();
+    if (planFromUrl) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      } catch {
+        // Silently fail if localStorage is not available
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   function guardar(nuevo: CartItem[]) {
     setItems(nuevo);
