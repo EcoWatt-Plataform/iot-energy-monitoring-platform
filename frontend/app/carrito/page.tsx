@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 type PlanId = "basico" | "avanzado" | "premium";
 
@@ -32,38 +32,27 @@ function getPlanFromUrl(): PlanId | null {
 }
 
 export default function CarritoPage() {
-  const [items, setItems] = useState<CartItem[]>([]);
-
-  // 1) cargar carrito guardado
-  useEffect(() => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) setItems(JSON.parse(raw));
-  }, []);
-
-  // 2) si viene ?plan=... -> sumar 1 (o agregar si no existe)
-  useEffect(() => {
-    const planFromUrl = getPlanFromUrl();
-    if (!planFromUrl) return;
+  const [items, setItems] = useState<CartItem[]>(() => {
+    if (typeof window === "undefined") return [];
 
     const raw = localStorage.getItem(STORAGE_KEY);
     const cart: CartItem[] = raw ? JSON.parse(raw) : [];
+    const planFromUrl = getPlanFromUrl();
+
+    if (!planFromUrl) return cart;
 
     const plan = PLANES[planFromUrl];
+    const existe = cart.some((item) => item.id === plan.id);
 
-    const idx = cart.findIndex((x) => x.id === plan.id);
-    let nuevo: CartItem[];
+    const nuevo = existe
+      ? cart.map((item) =>
+          item.id === plan.id ? { ...item, cantidad: item.cantidad + 1 } : item
+        )
+      : [...cart, { ...plan, cantidad: 1 }];
 
-    if (idx >= 0) {
-      nuevo = cart.map((x) =>
-        x.id === plan.id ? { ...x, cantidad: x.cantidad + 1 } : x
-      );
-    } else {
-      nuevo = [...cart, { ...plan, cantidad: 1 }];
-    }
-
-    setItems(nuevo);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(nuevo));
-  }, []);
+    return nuevo;
+  });
 
   function guardar(nuevo: CartItem[]) {
     setItems(nuevo);

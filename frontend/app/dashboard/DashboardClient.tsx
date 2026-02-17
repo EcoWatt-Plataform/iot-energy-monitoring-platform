@@ -182,15 +182,15 @@ export default function DashboardClient() {
     try {
       await loadSummary(month, selectedDeviceId);
       await loadDaily(month, selectedDeviceId);
-    } catch (e: any) {
-      setErr(e?.message || "Error");
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Error");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadDevices().catch((e: any) => setErr(e?.message || "Error"));
+    loadDevices().catch((e: unknown) => setErr(e instanceof Error ? e.message : "Error"));
   }, []);
 
   useEffect(() => {
