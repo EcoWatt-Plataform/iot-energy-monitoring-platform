@@ -60,15 +60,31 @@ export default function CarritoPage() {
   // Persist the initial cart update from URL to localStorage
   useEffect(() => {
     const planFromUrl = getPlanFromUrl();
-    if (planFromUrl) {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-      } catch {
-        // Silently fail if localStorage is not available
-      }
+    if (!planFromUrl) return;
+
+    // Re-read from localStorage to ensure we persist the correct merged state
+    const raw = localStorage.getItem(STORAGE_KEY);
+    let cart: CartItem[] = [];
+    try {
+      cart = raw ? JSON.parse(raw) : [];
+    } catch {
+      cart = [];
     }
-    // Only run once on mount to persist initial URL-based cart update
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    const plan = PLANES[planFromUrl];
+    const existe = cart.some((item) => item.id === plan.id);
+
+    const merged = existe
+      ? cart.map((item) =>
+          item.id === plan.id ? { ...item, cantidad: item.cantidad + 1 } : item
+        )
+      : [...cart, { ...plan, cantidad: 1 }];
+
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    } catch {
+      // Silently fail if localStorage is not available
+    }
   }, []);
 
 
