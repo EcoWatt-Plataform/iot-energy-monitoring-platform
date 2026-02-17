@@ -52,33 +52,25 @@ export default function CarritoPage() {
 
     const plan = PLANES[planFromUrl];
     
-    // Read current cart from localStorage to avoid race conditions
-    const raw = localStorage.getItem(STORAGE_KEY);
-    let currentCart: CartItem[] = [];
-    try {
-      currentCart = raw ? JSON.parse(raw) : [];
-    } catch {
-      currentCart = [];
-    }
-
-    const existe = currentCart.some((item) => item.id === plan.id);
-    
-    const merged = existe
-      ? currentCart.map((item) =>
-          item.id === plan.id ? { ...item, cantidad: item.cantidad + 1 } : item
-        )
-      : [...currentCart, { ...plan, cantidad: 1 }];
-
-    // Persist to localStorage
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-    } catch {
-      // Silently fail if localStorage is not available
-    }
-
-    // Update state with merged cart
     // eslint-disable-next-line react-hooks/set-state-in-effect -- URL param merge is intentional one-time sync on mount
-    setItems(merged);
+    setItems((currentCart) => {
+      const existe = currentCart.some((item) => item.id === plan.id);
+      
+      const merged = existe
+        ? currentCart.map((item) =>
+            item.id === plan.id ? { ...item, cantidad: item.cantidad + 1 } : item
+          )
+        : [...currentCart, { ...plan, cantidad: 1 }];
+
+      // Persist to localStorage
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      } catch {
+        // Silently fail if localStorage is not available
+      }
+
+      return merged;
+    });
   }, []);
 
 
