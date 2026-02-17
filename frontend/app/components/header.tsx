@@ -59,6 +59,19 @@ export default function Header() {
     fontWeight: 500,
   };
 
+  const buttonStyle: React.CSSProperties = {
+    color: textColor,
+    border: `1px solid ${
+      shouldShowWhiteBar ? "rgba(0,0,0,0.25)" : "rgba(255,255,255,0.65)"
+    }`,
+    padding: "8px 12px",
+    borderRadius: "10px",
+    transition: "all 160ms ease",
+    fontWeight: 500,
+    backgroundColor: "transparent",
+    cursor: "pointer",
+  };
+
   const supabase = createClient();
 
   const login = async () => {
@@ -122,7 +135,7 @@ export default function Header() {
           Carrito
         </Link>
         
-        <button type="button" onClick={login} style={rightBtnStyle}>
+        <button type="button" onClick={login} style={buttonStyle}>
           Ingresar con Google
         </button>
       </div>
