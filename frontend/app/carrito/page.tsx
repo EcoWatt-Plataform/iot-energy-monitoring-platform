@@ -32,59 +32,45 @@ function getPlanFromUrl(): PlanId | null {
 }
 
 export default function CarritoPage() {
+  // Pure initializer: only reads from localStorage with error handling
   const [items, setItems] = useState<CartItem[]>(() => {
     if (typeof window === "undefined") return [];
 
     const raw = localStorage.getItem(STORAGE_KEY);
-    let cart: CartItem[] = [];
     try {
-      cart = raw ? JSON.parse(raw) : [];
+      return raw ? JSON.parse(raw) : [];
     } catch {
       // Invalid JSON in storage, start fresh
-      cart = [];
+      return [];
     }
-
-    const planFromUrl = getPlanFromUrl();
-    if (!planFromUrl) return cart;
-
-    const plan = PLANES[planFromUrl];
-    const existe = cart.some((item) => item.id === plan.id);
-
-    return existe
-      ? cart.map((item) =>
-          item.id === plan.id ? { ...item, cantidad: item.cantidad + 1 } : item
-        )
-      : [...cart, { ...plan, cantidad: 1 }];
   });
 
-  // Persist the initial cart update from URL to localStorage
+  // Side effect: merge URL param into cart after initial render
   useEffect(() => {
     const planFromUrl = getPlanFromUrl();
     if (!planFromUrl) return;
 
-    // Re-read from localStorage to ensure we persist the correct merged state
-    const raw = localStorage.getItem(STORAGE_KEY);
-    let cart: CartItem[] = [];
-    try {
-      cart = raw ? JSON.parse(raw) : [];
-    } catch {
-      cart = [];
-    }
-
     const plan = PLANES[planFromUrl];
-    const existe = cart.some((item) => item.id === plan.id);
+    
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- URL param merge is intentional one-time sync on mount
+    setItems((currentCart) => {
+      const existe = currentCart.some((item) => item.id === plan.id);
+      
+      const merged = existe
+        ? currentCart.map((item) =>
+            item.id === plan.id ? { ...item, cantidad: item.cantidad + 1 } : item
+          )
+        : [...currentCart, { ...plan, cantidad: 1 }];
 
-    const merged = existe
-      ? cart.map((item) =>
-          item.id === plan.id ? { ...item, cantidad: item.cantidad + 1 } : item
-        )
-      : [...cart, { ...plan, cantidad: 1 }];
+      // Persist to localStorage
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      } catch {
+        // Silently fail if localStorage is not available
+      }
 
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-    } catch {
-      // Silently fail if localStorage is not available
-    }
+      return merged;
+    });
   }, []);
 
 
