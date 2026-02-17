@@ -67,6 +67,7 @@ export default function CarritoPage() {
         // Silently fail if localStorage is not available
       }
     }
+    // Only run once on mount to persist initial URL-based cart update
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
