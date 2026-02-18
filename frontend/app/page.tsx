@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 const HERO_IMG = "/banner1.jpeg";
 
 type Slide = {
@@ -182,11 +181,11 @@ export default function HomePage() {
           </div>
 
           {/* Flechas */}
-          <button type="button" onClick={prev} style={arrowBtn("left")}>
+          <button type="button" onClick={prev} style={arrowBtn("left", isMobile)}>
             ‹
           </button>
 
-          <button type="button" onClick={next} style={arrowBtn("right")}>
+          <button type="button" onClick={next} style={arrowBtn("right", isMobile)}>
             ›
           </button>
 
@@ -397,9 +396,7 @@ function ArrowBetween() {
   );
 }
 
-function arrowBtn(side: "left" | "right"): React.CSSProperties {
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-
+function arrowBtn(side: "left" | "right", isMobile: boolean): React.CSSProperties {
   return {
     position: "absolute",
     top: isMobile ? "85%" : "50%",

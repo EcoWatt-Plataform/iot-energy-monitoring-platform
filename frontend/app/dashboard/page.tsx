@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -229,8 +229,8 @@ export default function DashboardPage() {
     try {
       await loadSummary(month, selectedDeviceId);
       await loadDaily(month, selectedDeviceId);
-    } catch (e: any) {
-      setErr(e.message || "Error");
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Error");
     } finally {
       setLoading(false);
     }
@@ -240,8 +240,8 @@ export default function DashboardPage() {
     (async () => {
       try {
         await loadDevices();
-      } catch (e: any) {
-        setErr(e.message || "Error");
+      } catch (e: unknown) {
+        setErr(e instanceof Error ? e.message : "Error");
       }
     })();
   }, []);
