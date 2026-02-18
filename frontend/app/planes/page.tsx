@@ -58,6 +58,82 @@ export default function PlanesPage() {
           recommended
         />
       </div>
+      {/* ===== DISPOSITIVO INDIVIDUAL ===== */}
+      <div
+        style={{
+          maxWidth: "1100px",
+          margin: "50px auto 0",
+          padding: "0 10px",
+        }}
+      >
+        <div
+          style={{
+            borderRadius: "20px",
+            border: "1px solid #eee",
+            background: "white",
+            padding: "28px",
+            display: "flex",
+            alignItems: "center",
+            gap: "28px",
+            flexWrap: "wrap",
+            boxShadow: "0 10px 40px rgba(0,0,0,0.05)",
+          }}
+        >
+          {/* Imagen */}
+          <div
+            style={{
+              flex: "0 0 260px",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            <img
+              src="/dispo.jpeg"
+              alt="Dispositivo EcoWatt"
+              style={{
+                width: "100%",
+                maxWidth: "240px",
+                borderRadius: "16px",
+                objectFit: "contain",
+              }}
+            />
+          </div>
+
+          {/* Texto */}
+          <div style={{ flex: "1 1 300px" }}>
+            <h2 style={{ margin: 0, fontSize: "26px" }}>
+              ¿Querés solo el dispositivo?
+            </h2>
+
+            <p
+              style={{
+                marginTop: "12px",
+                marginBottom: "18px",
+                color: "#555",
+                lineHeight: 1.6,
+              }}
+            >
+              Comprá EcoWatt sin suscripción y empezá a monitorear un solo
+              electrodoméstico desde el primer día.
+            </p>
+
+            <a
+              href="/carrito?item=dispositivo"
+              style={{
+                display: "inline-block",
+                padding: "12px 18px",
+                borderRadius: "12px",
+                textDecoration: "none",
+                color: "black",
+                background: "linear-gradient(90deg, #6992eb, #9b6ceb)",
+                fontWeight: 700,
+              }}
+            >
+              Agregar al carrito
+            </a>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -39,6 +39,19 @@ export default function HomePage() {
   );
 
   const [index, setIndex] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+
+    React.useEffect(() => {
+      function handleResize() {
+        setIsMobile(window.innerWidth < 768);
+      }
+
+      handleResize(); // ejecuta al cargar
+      window.addEventListener("resize", handleResize);
+
+      return () => window.removeEventListener("resize", handleResize);
+    }, []);
+
   const current = slides[index];
 
   function prev() {
@@ -53,135 +66,227 @@ export default function HomePage() {
     <div>
       {/* ================= HERO FULL SCREEN (SLIDER) ================= */}
       <section
-        style={{
-          position: "relative",
-          borderRadius: "24px",
-          height: "calc(100vh + 64px)",
-          width: "100%",
-          overflow: "hidden",
-          marginTop: "-84px",
-        }}
-      >
-        {/* Imagen de fondo */}
-        <div
           style={{
-            position: "absolute",
-            inset: 0,
-            backgroundImage: `url('${HERO_IMG}')`,
-            backgroundRepeat: "no-repeat",
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            transform: "scale(1.02)",
-          }}
-        />
-
-        {/* Overlay suave para que el texto se lea */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "linear-gradient(90deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.08) 40%, rgba(0,0,0,0.25) 100%)",
-          }}
-        />
-
-        {/* Contenido del slide (derecha) */}
-        <div
-          style={{
-            position: "absolute",
-            right: "6%",
-            top: "50%",
-            transform: "translateY(-50%)",
-            width: "min(560px, 92%)",
-            color: "white",
+            position: "relative",
+            width: "100%",
+            height: "85vh",
+            minHeight: "520px",
+            overflow: "hidden",
+            marginTop: "-84px",
           }}
         >
-          <h1 style={{ margin: 0, fontSize: "52px", lineHeight: 1.05 }}>
-            {current.title}
-          </h1>
+          {/* Imagen fondo */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              backgroundImage: `url('${HERO_IMG}')`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+            }}
+          />
 
-          <p style={{ marginTop: "16px", fontSize: "20px", lineHeight: 1.5 }}>
-            {current.subtitle}
-          </p>
+          {/* Overlay */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(to right, rgba(0,0,0,0.55), rgba(0,0,0,0.25))",
+            }}
+          />
 
-          <div style={{ marginTop: "22px", display: "flex", gap: "12px", flexWrap: "wrap" }}>
-            <a
-              href={current.primaryCta.href}
+          {/* Contenido */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: isMobile ? "center" : "flex-end",
+              padding: isMobile ? "20px" : "0 6%",
+            }}
+          >
+            <div
               style={{
-                display: "inline-block",
-                padding: "12px 16px",
-                borderRadius: "12px",
-                textDecoration: "none",
+                maxWidth: "560px",
+                width: "100%",
                 color: "white",
-                background: "linear-gradient(90deg, #6992eb, #9b6ceb)",
-                fontWeight: 700,
+                textAlign: isMobile ? "center" : "left",
+                background: isMobile ? "rgba(58, 57, 56, 0.58)" : "transparent",
+                padding: isMobile ? "24px" : 0,
+                borderRadius: isMobile ? "18px" : 0,
               }}
             >
-              {current.primaryCta.label}
-            </a>
-
-            {current.secondaryCta ? (
-              <a
-                href={current.secondaryCta.href}
+              <h1
                 style={{
-                  display: "inline-block",
-                  padding: "12px 16px",
-                  borderRadius: "12px",
-                  textDecoration: "none",
-                  color: "white",
-                  border: "1px solid rgba(255,255,255,0.6)",
-                  background: "rgba(0,0,0,0.25)",
-                  fontWeight: 700,
+                  margin: 0,
+                  fontSize: "clamp(28px, 5vw, 52px)",
+                  lineHeight: 1.1,
                 }}
               >
-                {current.secondaryCta.label}
-              </a>
-            ) : null}
+                {current.title}
+              </h1>
+
+              <p
+                style={{
+                  marginTop: "16px",
+                  fontSize: "clamp(16px, 2.5vw, 20px)",
+                  lineHeight: 1.5,
+                }}
+              >
+                {current.subtitle}
+              </p>
+
+              <div
+                style={{
+                  marginTop: "22px",
+                  display: "flex",
+                  gap: "12px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <a
+                  href={current.primaryCta.href}
+                  style={{
+                    padding: "12px 16px",
+                    borderRadius: "12px",
+                    textDecoration: "none",
+                    color: "white",
+                    background: "linear-gradient(90deg, #6992eb, #9b6ceb)",
+                    fontWeight: 700,
+                  }}
+                >
+                  {current.primaryCta.label}
+                </a>
+
+                {current.secondaryCta && (
+                  <a
+                    href={current.secondaryCta.href}
+                    style={{
+                      padding: "12px 16px",
+                      borderRadius: "12px",
+                      textDecoration: "none",
+                      color: "white",
+                      border: "1px solid rgba(255,255,255,0.6)",
+                      background: "rgba(0,0,0,0.3)",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {current.secondaryCta.label}
+                  </a>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
 
-        {/* Flechas */}
-        <button type="button" onClick={prev} aria-label="Anterior" style={arrowBtn("left")}>
-          ‹
-        </button>
-        <button type="button" onClick={next} aria-label="Siguiente" style={arrowBtn("right")}>
-          ›
-        </button>
+          {/* Flechas */}
+          <button type="button" onClick={prev} style={arrowBtn("left")}>
+            ‹
+          </button>
 
-        {/* Dots */}
-        <div
+          <button type="button" onClick={next} style={arrowBtn("right")}>
+            ›
+          </button>
+
+          {/* Dots */}
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              bottom: "20px",
+              transform: "translateX(-50%)",
+              display: "flex",
+              gap: "10px",
+            }}
+          >
+            {slides.map((s, i) => (
+              <button
+                key={s.id}
+                onClick={() => setIndex(i)}
+                style={{
+                  width: i === index ? "26px" : "10px",
+                  height: "10px",
+                  borderRadius: "999px",
+                  border: "none",
+                  cursor: "pointer",
+                  backgroundColor:
+                    i === index
+                      ? "rgba(255,255,255,0.9)"
+                      : "rgba(255,255,255,0.35)",
+                  transition: "all 160ms ease",
+                }}
+              />
+            ))}
+          </div>
+        </section>
+      <section
+        style={{
+          marginTop: "10px",
+          padding: "28px 20px",
+          textAlign: "center",
+          background: "white",
+        }}
+      >
+        <h2 style={{ fontSize: "32px", marginBottom: "16px" }}>
+          Comprá el dispositivo individual
+        </h2>
+
+        <p
           style={{
-            position: "absolute",
-            left: "50%",
-            bottom: "18px",
-            transform: "translateX(-50%)",
-            display: "flex",
-            gap: "10px",
+            maxWidth: "700px",
+            margin: "0 auto",
+            color: "#555",
+            lineHeight: 1.6,
+            marginBottom: "24px",
           }}
         >
-          {slides.map((s, i) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setIndex(i)}
-              aria-label={`Ir al slide ${s.id}`}
-              style={{
-                width: i === index ? "26px" : "10px",
-                height: "10px",
-                borderRadius: "999px",
-                border: "none",
-                cursor: "pointer",
-                backgroundColor: i === index ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.35)",
-                transition: "all 160ms ease",
-              }}
-            />
-          ))}
+          Si querés empezar sin suscripción, podés adquirir únicamente el
+          dispositivo EcoWatt y comenzar a monitorear tu consumo energético
+          desde el primer día.
+        </p>
+
+        <a
+          href="/planes"
+          style={{
+            display: "inline-block",
+            padding: "12px 20px",
+            borderRadius: "12px",
+            background: "linear-gradient(90deg, #6992eb, #9b6ceb)",
+            color: "white",
+            textDecoration: "none",
+            fontWeight: 600,
+            marginBottom: "40px",
+          }}
+        >
+          Ver opciones de compra
+        </a>
+
+        {/* Video */}
+        <div style={{ maxWidth: "1100px", margin: "0 auto", width: "100%" }}>
+          <video
+            src="/video.mp4"
+            autoPlay
+            muted
+            loop
+            playsInline
+            style={{
+              width: "100%",
+              borderRadius: "16px",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
+            }}
+          />
         </div>
+
+        <p style={{ marginTop: "18px", color: "#666" }}>
+          Instalación simple. Conectá y empezá a medir en segundos.
+        </p>
       </section>
 
       {/* ================= CONTENIDO ABAJO ================= */}
       <div style={{ padding: "40px" }}>
-        <div style={{ marginTop: "70px" }}>
+        <div style={{ marginTop: "20px" }}>
           <h2 style={{ fontSize: "34px", textAlign: "center", marginBottom: "10px" }}>
             Cómo funciona
           </h2>
@@ -293,11 +398,13 @@ function ArrowBetween() {
 }
 
 function arrowBtn(side: "left" | "right"): React.CSSProperties {
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+
   return {
     position: "absolute",
-    top: "50%",
+    top: isMobile ? "85%" : "50%",
     transform: "translateY(-50%)",
-    ...(side === "left" ? { left: "18px" } : { right: "18px" }),
+    ...(side === "left" ? { left: isMobile ? "20px" : "18px" } : { right: isMobile ? "20px" : "18px" }),
     width: "46px",
     height: "46px",
     borderRadius: "999px",
@@ -305,8 +412,7 @@ function arrowBtn(side: "left" | "right"): React.CSSProperties {
     background: "rgba(0,0,0,0.25)",
     color: "white",
     cursor: "pointer",
-    fontSize: "34px",
-    lineHeight: "40px",
+    fontSize: "28px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
