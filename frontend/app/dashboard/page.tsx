@@ -205,17 +205,38 @@ export default function DashboardPage() {
       return;
     }
 
-    const entries = await Promise.all(
-      devices.map(async (d) => {
+    // Limitar la concurrencia de requests para evitar picos de carga con muchos devices
+    const CONCURRENCY_LIMIT = 5;
+    const entries: [number, DailyPoint[]][] = [];
+    let index = 0;
+
+    async function worker() {
+      // Cada worker procesa devices de a uno hasta que no quede ninguno
+      while (true) {
+        const currentIndex = index;
+        if (currentIndex >= devices.length) return;
+        index = currentIndex + 1;
+        const d = devices[currentIndex];
+
         const url = `/api/v1/export/daily.csv?month=${encodeURIComponent(
           nextMonth
         )}&device_id=${d.id}`;
         const res = await fetch(url);
         const text = await res.text();
-        if (!res.ok) return [d.id, [] as DailyPoint[]] as const;
-        return [d.id, parseDailyCsv(text)] as const;
-      })
+
+        if (!res.ok) {
+          entries.push([d.id, [] as DailyPoint[]]);
+        } else {
+          entries.push([d.id, parseDailyCsv(text)]);
+        }
+      }
+    }
+
+    const workers = Array.from(
+      { length: Math.min(CONCURRENCY_LIMIT, devices.length) },
+      () => worker()
     );
+    await Promise.all(workers);
 
     const obj: Record<number, DailyPoint[]> = {};
     for (const [id, pts] of entries) obj[id] = pts;
