@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import Header from "./components/header";
+import Link from "next/link";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,59 +30,12 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         style={{ backgroundColor: "white", color: "black" }}
       >
-        {/* HEADER */}
-        <header
-          style={{
-            backgroundColor: "black",
-            color: "white",
-            padding: "14px 24px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          {/* Izquierda: Logo */}
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <img
-              src="/logo2.jpeg"
-              alt="EcoWatt"
-              style={{ height: "32px", width: "auto" }}
-            />
-            <span style={{ fontWeight: 600, fontSize: "18px" }}>EcoWatt</span>
-          </div>
+        {/* HEADER NUEVO (estilo Rivian) */}
+        <Header />
 
-          {/* Centro: Menú */}
-          <nav style={{ display: "flex", gap: "20px" }}>
-            <a href="/planes" style={{ color: "white", textDecoration: "none" }}>
-              Planes
-            </a>
-            <a
-              href="/soporte"
-              style={{ color: "white", textDecoration: "none" }}
-            >
-              Soporte
-            </a>
-          </nav>
-
-          {/* Derecha: Login */}
-          <div>
-            <a
-              href="/login"
-              style={{
-                color: "white",
-                textDecoration: "none",
-                border: "1px solid white",
-                padding: "6px 12px",
-                borderRadius: "8px",
-              }}
-            >
-              Iniciar sesión
-            </a>
-          </div>
-        </header>
-
-        {/* ACÁ SE RENDERIZA LA PÁGINA */}
-        {children}
+        {/* IMPORTANTE:
+            como el header es fixed, agregamos padding-top para que no tape el contenido */}
+        <div style={{ paddingTop: "84px" }}>{children}</div>
 
         {/* ================= FOOTER ================= */}
         <footer
@@ -104,30 +59,23 @@ export default function RootLayout({
             }}
           >
             {/* Logo */}
-            <img
-              src="/logo2.jpeg"
-              alt="EcoWatt"
-              style={{ height: "28px", width: "auto" }}
-            />
+            <Link href="/" style={{ display: "flex", alignItems: "center" }}>
+              <img
+                src="/logo4.PNG"
+                alt="EcoWatt"
+                style={{ height: "28px", width: "auto" }}
+              />
+            </Link>
 
             {/* Links */}
             <div style={{ display: "flex", gap: "18px", flexWrap: "wrap" }}>
-              <a
-                href="/producto"
-                style={{ color: "white", textDecoration: "none" }}
-              >
+              <Link href="/producto" style={{ color: "white", textDecoration: "none" }}>
                 Producto
-              </a>
-              <a
-                href="/planes"
-                style={{ color: "white", textDecoration: "none" }}
-              >
+              </Link>
+              <Link href="/planes" style={{ color: "white", textDecoration: "none" }}>
                 Planes
-              </a>
-              <a
-                href="/soporte"
-                style={{ color: "white", textDecoration: "none" }}
-              >
+              </Link>
+              <Link href="/soporte" style={{ color: "white", textDecoration: "none" }}>
                 Soporte
               </a>
             </div>
@@ -148,7 +96,7 @@ export default function RootLayout({
               gap: "10px",
             }}
           >
-            <span>© 2026 EcoWatt. Todos los derechos reservados.</span>
+            <span>©️ 2026 EcoWatt. Todos los derechos reservados.</span>
             <span>Monitoreo inteligente del consumo energético</span>
           </div>
         </footer>

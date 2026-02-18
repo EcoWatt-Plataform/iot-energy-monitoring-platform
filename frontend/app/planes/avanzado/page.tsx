@@ -11,7 +11,7 @@ export default function PlanAvanzadoPage() {
         }}
       >
         <img
-          src="/basico.jpeg" // <-- si tu archivo es .jpg o .jpeg, cambialo acá
+          src="/basico.jpeg"
           alt="Plan Básico EcoWatt"
           style={{
             width: "100%",
@@ -27,10 +27,13 @@ export default function PlanAvanzadoPage() {
             position: "absolute",
             top: "22px",
             right: "22px",
-            width: "min(440px, 92%)",
+            width: "min(420px, 92%)",
+            padding: "22px",
             textAlign: "left",
-            color: "black",
-            textShadow: "0 2px 10px rgba(0,0,0,0.55)",
+            background: "rgba(255, 255, 255, 0.92)",
+            borderRadius: "16px",
+            boxShadow: "0 20px 50px rgba(0,0,0,0.15)",
+            backdropFilter: "blur(6px)",
           }}
         >
           <div style={{ fontSize: "12px", opacity: 0.95, marginBottom: "8px" }}>
@@ -46,7 +49,6 @@ export default function PlanAvanzadoPage() {
           </p>
 
           <ul style={{ margin: 0, lineHeight: 1.7 }}>
-            <li>Hasta 5 dispositivos</li>
             <li>Gráficos día / semana / mes</li>
             <li>Historial extendido</li>
             <li>Alertas simples</li>
@@ -69,7 +71,7 @@ export default function PlanAvanzadoPage() {
             </a>
 
             <a
-              href="/login"
+              href="/carrito?plan=avanzado"
               style={{
                 display: "inline-block",
                 padding: "10px 12px",
@@ -124,7 +126,6 @@ export default function PlanAvanzadoPage() {
           <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
             <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Comparado con Básico</h3>
             <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
-              <li>Más dispositivos (hasta 5)</li>
               <li>Historial más largo</li>
               <li>Más tipos de gráficos</li>
             </ul>

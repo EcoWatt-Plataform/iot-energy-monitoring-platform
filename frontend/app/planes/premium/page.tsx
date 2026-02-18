@@ -28,10 +28,13 @@ export default function PlanPremiumPage() {
             position: "absolute",
             top: "22px",
             right: "22px",
-            width: "min(460px, 92%)",
+            width: "min(420px, 92%)",
+            padding: "22px",
             textAlign: "left",
-            color: "black",
-            textShadow: "0 2px 10px rgba(0,0,0,0.55)",
+            background: "rgba(255, 255, 255, 0.92)",
+            borderRadius: "16px",
+            boxShadow: "0 20px 50px rgba(0,0,0,0.15)",
+            backdropFilter: "blur(6px)",
           }}
         >
           <div style={{ fontSize: "12px", opacity: 0.95, marginBottom: "8px" }}>
@@ -43,11 +46,10 @@ export default function PlanPremiumPage() {
           </h1>
 
           <p style={{ lineHeight: 1.6, margin: 0, marginBottom: "14px", opacity: 0.95 }}>
-            Para monitoreo completo: más dispositivos, más historial y funciones avanzadas para ahorrar al máximo.
+            Para monitoreo completo: más historial y funciones avanzadas para ahorrar al máximo.
           </p>
 
           <ul style={{ margin: 0, lineHeight: 1.7 }}>
-            <li>Hasta 20 dispositivos</li>
             <li>Historial extendido (12 meses)</li>
             <li>Alertas avanzadas</li>
             <li>Reportes detallados</li>
@@ -70,7 +72,7 @@ export default function PlanPremiumPage() {
             </a>
 
             <a
-              href="/login"
+              href="/carrito?plan=premium"
               style={{
                 display: "inline-block",
                 padding: "10px 12px",
@@ -125,7 +127,6 @@ export default function PlanPremiumPage() {
           <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
             <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Comparado con Avanzado</h3>
             <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
-              <li>Más dispositivos (hasta 20)</li>
               <li>Más historial</li>
               <li>Alertas y reportes avanzados</li>
             </ul>

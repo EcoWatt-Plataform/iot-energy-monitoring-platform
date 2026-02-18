@@ -27,7 +27,7 @@ export default function ProductoPage() {
           </div>
 
           <a
-            type="/planes"
+            href="/planes"
             style={{
               padding: "10px 14px",
               borderRadius: "10px",

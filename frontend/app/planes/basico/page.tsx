@@ -28,10 +28,12 @@ export default function PlanBasicoPage() {
             top: "22px",
             right: "22px",
             width: "min(420px, 92%)",
-            padding: "18px",
+            padding: "22px",
             textAlign: "left",
-            color: "black",
-            textShadow: "0 2px 10px rgba(0, 0, 0, 0.55)",
+            background: "rgba(255, 255, 255, 0.92)",
+            borderRadius: "16px",
+            boxShadow: "0 20px 50px rgba(0,0,0,0.15)",
+            backdropFilter: "blur(6px)",
           }}
         >
           <div style={{ fontSize: "12px", opacity: 0.98, marginBottom: "8px" }}>
@@ -47,7 +49,6 @@ export default function PlanBasicoPage() {
           </p>
 
           <ul style={{ margin: 0, lineHeight: 1.7 }}>
-            <li>Hasta 1 dispositivo</li>
             <li>Consumo en vivo</li>
             <li>Historial básico</li>
           </ul>
@@ -69,7 +70,7 @@ export default function PlanBasicoPage() {
             </a>
 
             <a
-              href="/carrito"
+              href="/carrito?plan=basico"
               style={{
                 display: "inline-block",
                 padding: "10px 12px",
@@ -123,7 +124,6 @@ export default function PlanBasicoPage() {
           <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
             <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Limitaciones</h3>
             <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
-              <li>Solo 1 dispositivo</li>
               <li>Menos historial que planes superiores</li>
               <li>Sin reportes avanzados</li>
             </ul>
