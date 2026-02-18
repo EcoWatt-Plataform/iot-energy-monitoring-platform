@@ -1,23 +1,29 @@
-/*"use client";
+﻿"use client";
 
+import { useEffect, useMemo, useState } from "react";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Tooltip,
+  Legend,
+  Title,
+} from "chart.js";
+import { Line, Bar } from "react-chartjs-2";
 
-RECOMENDACION LOGIN
-al hacer login con google, debes mandar directamente a /dashboard, sin pasar por la home.
-Ahí el server component de dashboard ya se encarga de validar el user y mostrar el contenido o redirigir a login si no hay sesión.
-tambien recomiendo utilizar un useContext con la sesion del user para no tener que hacer fetches de validación en cada componente hijo del dashboard, pero eso ya es un extra.
-eliminaria el callback en home, y haria que el callback de google redirija directo a dashboard, donde se valida la sesión y se muestra el contenido correspondiente.
-
-
-
-export default async function DashboardPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) redirect("/");
-
-  return <DashboardClient />;
-}
-
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Tooltip,
+  Legend,
+  Title
+);
 
 type Plan = "basico" | "avanzado" | "premium";
 
@@ -50,7 +56,7 @@ function startOfWeekLabel(isoDate: string) {
 /** =========================
  *  COLORES (EcoWatt vibe)
  *  ========================= */
-/* const PALETTE = [
+const PALETTE = [
   "#6992EB",
   "#9B6CEB",
   "#22C55E",
@@ -73,7 +79,7 @@ function withAlpha(hex: string, alpha: number) {
 
 /** =========================
  *  CSV PARSER (daily.csv)
- *  ========================= 
+ *  ========================= */
 function parseDailyCsv(text: string): DailyPoint[] {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length <= 1) return [];
@@ -223,11 +229,9 @@ export default function DashboardPage() {
     try {
       await loadSummary(month, selectedDeviceId);
       await loadDaily(month, selectedDeviceId);
-    } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : "Error";
-        setErr(message);
-      }
- finally {
+    } catch (e: any) {
+      setErr(e.message || "Error");
+    } finally {
       setLoading(false);
     }
   }
@@ -236,11 +240,9 @@ export default function DashboardPage() {
     (async () => {
       try {
         await loadDevices();
-      } catch (e: unknown) {
-          const message = e instanceof Error ? e.message : "Error";
-          setErr(message);
-        }
-
+      } catch (e: any) {
+        setErr(e.message || "Error");
+      }
     })();
   }, []);
 
