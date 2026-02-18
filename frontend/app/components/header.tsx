@@ -66,15 +66,25 @@ export default function Header() {
     font: "inherit",
   };
 
-  const supabase = createClient();
-
   const login = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
-      },
-    });
+    const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+    const baseUrl = configuredSiteUrl || window.location.origin;
+    const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
+
+    try {
+      const supabase = createClient();
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${normalizedBaseUrl}/auth/callback`,
+        },
+      });
+    } catch (error) {
+      console.error(error);
+      window.alert(
+        "Falta configurar Supabase en frontend/.env.local (NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY)."
+      );
+    }
   };
 
 
