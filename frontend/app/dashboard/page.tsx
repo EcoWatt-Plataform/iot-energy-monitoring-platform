@@ -501,10 +501,11 @@ export default function DashboardPage() {
     if (!allowedPeriods.includes(period)) setPeriod(allowedPeriods[0]);
   }, [allowedPeriods, period]);
 
-  // Alertas según plan
+  // Alertas según plan (solo afecta al renderizado de la UI)
   const canSeeAlerts = plan !== "basico";
-  // Descargables solo premium
-  const canDownload = plan === "premium";
+  // Descargables: el control de acceso real debe hacerse SIEMPRE en el backend.
+  // No usamos el estado de `plan` del cliente como fuente de verdad para permisos.
+  const canDownload = false;
 
   const noDailyData =
     selectedDeviceId !== null
