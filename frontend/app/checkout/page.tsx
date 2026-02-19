@@ -26,19 +26,15 @@ export default function CheckoutPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loadingCart, setLoadingCart] = useState(true);
 
-  // Responsive detector
   const [isMobile, setIsMobile] = useState(false);
 
-  // Datos comprador
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [usageDetails, setUsageDetails] = useState("");
 
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
 
-  // =============================
-  // DETECTAR MOBILE
-  // =============================
   useEffect(() => {
     function onResize() {
       setIsMobile(window.innerWidth < 900);
@@ -48,9 +44,6 @@ export default function CheckoutPage() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // =============================
-  // CARGAR CARRITO
-  // =============================
   useEffect(() => {
     try {
       const raw = localStorage.getItem(CART_KEY);
@@ -67,18 +60,14 @@ export default function CheckoutPage() {
     return cart.reduce((acc, x) => acc + x.precio * x.cantidad, 0);
   }, [cart]);
 
-  // =============================
-  // VALIDACION
-  // =============================
   function validate() {
     setErr(null);
     setOkMsg(null);
 
-    if (!cart.length) return "Tu carrito está vacío.";
-    if (!fullName.trim()) return "Completá tu nombre.";
-    if (!email.trim()) return "Completá tu email.";
-    if (!/^\S+@\S+\.\S+$/.test(email.trim()))
-      return "El email no es válido.";
+    if (!cart.length) return "Tu carrito esta vacio.";
+    if (!fullName.trim()) return "Completa tu nombre.";
+    if (!email.trim()) return "Completa tu email.";
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return "El email no es valido.";
 
     return null;
   }
@@ -94,6 +83,7 @@ export default function CheckoutPage() {
       buyer: {
         fullName: fullName.trim(),
         email: email.trim(),
+        usageDetails: usageDetails.trim(),
       },
       cart,
       totals: { subtotal },
@@ -120,9 +110,7 @@ export default function CheckoutPage() {
         margin: "0 auto",
       }}
     >
-      <h1 style={{ fontSize: isMobile ? "28px" : "40px", marginBottom: "20px" }}>
-        Checkout
-      </h1>
+      <h1 style={{ fontSize: isMobile ? "28px" : "40px", marginBottom: "20px" }}>Checkout</h1>
 
       {err && (
         <div
@@ -160,25 +148,27 @@ export default function CheckoutPage() {
           alignItems: "start",
         }}
       >
-        {/* FORM */}
         <div style={box}>
-          <h2 style={{ marginTop: 0, marginBottom: "14px" }}>
-            Tus datos
-          </h2>
+          <h2 style={{ marginTop: 0, marginBottom: "14px" }}>Tus datos</h2>
 
           <Field label="Nombre y apellido">
-            <input
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              style={input}
-            />
+            <input value={fullName} onChange={(e) => setFullName(e.target.value)} style={input} />
           </Field>
 
           <Field label="Email">
-            <input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              style={input}
+            <input value={email} onChange={(e) => setEmail(e.target.value)} style={input} />
+          </Field>
+
+          <Field label="Para que y donde lo vas a usar?">
+            <textarea
+              value={usageDetails}
+              onChange={(e) => setUsageDetails(e.target.value)}
+              placeholder="Ej: Cocina y living del local, heladera, horno electrico, iluminacion..."
+              style={{
+                ...input,
+                minHeight: "100px",
+                resize: "vertical",
+              }}
             />
           </Field>
 
@@ -187,16 +177,11 @@ export default function CheckoutPage() {
           </button>
         </div>
 
-        {/* RESUMEN */}
         <div style={box}>
-          <h2 style={{ marginTop: 0, marginBottom: "14px" }}>
-            Resumen
-          </h2>
+          <h2 style={{ marginTop: 0, marginBottom: "14px" }}>Resumen</h2>
 
           {!cart.length ? (
-            <p style={{ margin: 0, color: "#666" }}>
-              Tu carrito está vacío.
-            </p>
+            <p style={{ margin: 0, color: "#666" }}>Tu carrito esta vacio.</p>
           ) : (
             <>
               {cart.map((x) => (
@@ -213,9 +198,7 @@ export default function CheckoutPage() {
                   <span>
                     {x.nombre} x{x.cantidad}
                   </span>
-                  <span style={{ fontWeight: 700 }}>
-                    {money(x.precio * x.cantidad)}
-                  </span>
+                  <span style={{ fontWeight: 700 }}>{money(x.precio * x.cantidad)}</span>
                 </div>
               ))}
 
@@ -238,14 +221,10 @@ export default function CheckoutPage() {
   );
 }
 
-/* ================= UI Helpers ================= */
-
 function Field(props: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: "14px", display: "flex", flexDirection: "column", gap: "6px" }}>
-      <label style={{ fontSize: "13px", color: "#555" }}>
-        {props.label}
-      </label>
+      <label style={{ fontSize: "13px", color: "#555" }}>{props.label}</label>
       {props.children}
     </div>
   );

@@ -127,7 +127,7 @@ function sumMonthly(points: DailyPoint[]) {
 }
 
 export default function DashboardPage() {
-  // ✅ SIMULACIÓN DE PLAN (para probar sin login)
+  // SIMULACIÓN DE PLAN (para probar sin login)
   const [plan, setPlan] = useState<Plan>("basico");
 
   const [devices, setDevices] = useState<Device[]>([]);
@@ -147,13 +147,37 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // ✅ Selector de período (según plan)
+  // Selector de período (según plan)
   type Period = "daily" | "weekly" | "monthly" | "compare";
   const [period, setPeriod] = useState<Period>("daily");
 
   const deviceOptions = useMemo(() => {
     return [{ id: 0, name: "Todos (comparar)" }, ...devices];
   }, [devices]);
+
+  /** =========================
+   *  DESCARGABLES (solo Premium)
+   *  ========================= */
+  const csvUrl = useMemo(() => {
+    // CSV completo (mediciones)
+    let u = `/api/v1/export/measurements.csv?month=${encodeURIComponent(month)}`;
+    if (selectedDeviceId !== null) u += `&device_id=${selectedDeviceId}`;
+    return u;
+  }, [month, selectedDeviceId]);
+
+  const dailyCsvUrl = useMemo(() => {
+    // CSV diario
+    let u = `/api/v1/export/daily.csv?month=${encodeURIComponent(month)}`;
+    if (selectedDeviceId !== null) u += `&device_id=${selectedDeviceId}`;
+    return u;
+  }, [month, selectedDeviceId]);
+
+  const alertsCsvUrl = useMemo(() => {
+    // CSV alertas
+    let u = `/api/v1/export/alerts.csv?month=${encodeURIComponent(month)}`;
+    if (selectedDeviceId !== null) u += `&device_id=${selectedDeviceId}`;
+    return u;
+  }, [month, selectedDeviceId]);
 
   /** =========================
    *  FETCHES
@@ -334,7 +358,6 @@ export default function DashboardPage() {
     // Todos: barras agrupadas (una serie por device)
     const ids = devices.map((d) => d.id);
 
-    // labels comunes = semanas, tomadas del que más semanas tenga
     const weeklyById: Record<number, { label: string; value: number }[]> = {};
     ids.forEach((id) => (weeklyById[id] = groupWeekly(dailyByDevice[id] || [])));
 
@@ -391,6 +414,7 @@ export default function DashboardPage() {
           data,
           backgroundColor: colors,
           borderColor: borders,
+          borderWidth: 1,
         },
       ],
     };
@@ -439,8 +463,11 @@ export default function DashboardPage() {
     };
   }, [commonOptions]);
 
+  // Comparativo (premium) con colores distintos por barra
   function makeCompareBar(title: string, items: { label: string; value: number }[]) {
-    const base = "#6992EB";
+    const bg = items.map((_, i) => withAlpha(colorForIndex(i), 0.55));
+    const border = items.map((_, i) => colorForIndex(i));
+
     return {
       data: {
         labels: items.map((x) => x.label),
@@ -448,8 +475,9 @@ export default function DashboardPage() {
           {
             label: title,
             data: items.map((x) => x.value),
-            borderColor: base,
-            backgroundColor: withAlpha(base, 0.35),
+            backgroundColor: bg,
+            borderColor: border,
+            borderWidth: 1,
           },
         ],
       },
@@ -472,6 +500,11 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!allowedPeriods.includes(period)) setPeriod(allowedPeriods[0]);
   }, [allowedPeriods, period]);
+
+  // Alertas según plan
+  const canSeeAlerts = plan !== "basico";
+  // Descargables solo premium
+  const canDownload = plan === "premium";
 
   const noDailyData =
     selectedDeviceId !== null
@@ -527,6 +560,21 @@ export default function DashboardPage() {
         <button type="button" onClick={refreshAll} disabled={loading} style={refreshBtn}>
           {loading ? "Cargando..." : "Refrescar"}
         </button>
+
+        {/* DESCARGABLES SOLO PREMIUM */}
+        {canDownload && (
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <a style={dlBtn} href={csvUrl}>
+              Descargar CSV (completo)
+            </a>
+            <a style={dlBtn} href={dailyCsvUrl}>
+              CSV diario
+            </a>
+            <a style={dlBtn} href={alertsCsvUrl}>
+              CSV alertas
+            </a>
+          </div>
+        )}
       </div>
 
       {err && (
@@ -591,18 +639,20 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* Alertas */}
-      <section style={sectionBox}>
-        <h2 style={{ marginTop: 0 }}>Alertas</h2>
-        <ul style={{ margin: 0, paddingLeft: "18px", color: "#333" }}>
-          {(summary?.alerts || []).map((a, idx) => (
-            <li key={idx}>
-              {a.device_name}: {Math.round(a.energy_wh)} Wh &gt; {Math.round(a.threshold_wh)} Wh
-            </li>
-          ))}
-          {(!summary?.alerts || summary.alerts.length === 0) && <li>Sin alertas</li>}
-        </ul>
-      </section>
+      {/* Alertas SOLO si NO es Básico */}
+      {canSeeAlerts && (
+        <section style={sectionBox}>
+          <h2 style={{ marginTop: 0 }}>Alertas</h2>
+          <ul style={{ margin: 0, paddingLeft: "18px", color: "#333" }}>
+            {(summary?.alerts || []).map((a, idx) => (
+              <li key={idx}>
+                {a.device_name}: {Math.round(a.energy_wh)} Wh &gt; {Math.round(a.threshold_wh)} Wh
+              </li>
+            ))}
+            {(!summary?.alerts || summary.alerts.length === 0) && <li>Sin alertas</li>}
+          </ul>
+        </section>
+      )}
     </main>
   );
 }
@@ -639,6 +689,17 @@ const refreshBtn: React.CSSProperties = {
   cursor: "pointer",
   background: "black",
   color: "white",
+};
+
+// ✅ Botones descargables
+const dlBtn: React.CSSProperties = {
+  display: "inline-block",
+  borderRadius: "10px",
+  padding: "10px 12px",
+  border: "1px solid #ddd",
+  textDecoration: "none",
+  color: "black",
+  background: "white",
 };
 
 function tabBtn(active: boolean): React.CSSProperties {

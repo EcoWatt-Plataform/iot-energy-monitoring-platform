@@ -11,11 +11,30 @@ export default function Header() {
   const pathname = usePathname();
   const isHome = pathname === "/";
 
-  // true when the mouse is over the header
+  // Visual state
   const [isHovered, setIsHovered] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  // Auth state
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [isAuthBusy, setIsAuthBusy] = useState(false);
+
+  useEffect(() => {
+    if (!isHome) {
+      setIsHovered(false);
+      setIsScrolled(true);
+      return;
+    }
+
+    function onScroll() {
+      setIsScrolled(window.scrollY > 10);
+    }
+
+    onScroll();
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [isHome]);
 
   useEffect(() => {
     let mounted = true;
@@ -60,9 +79,9 @@ export default function Header() {
     };
   }, []);
 
-  // On Home: transparent by default and changes on hover.
-  // On other pages: white background.
-  const shouldShowWhiteBar = !isHome || isHovered;
+  // Home: transparent initially. Other pages: white.
+  const shouldShowWhiteBar = !isHome || isHovered || isScrolled;
+  const textColor = shouldShowWhiteBar ? "black" : "white";
 
   const headerStyle: React.CSSProperties = {
     position: "fixed",
@@ -83,8 +102,6 @@ export default function Header() {
     border: shouldShowWhiteBar ? "1px solid rgba(0,0,0,0.08)" : "1px solid transparent",
     boxShadow: shouldShowWhiteBar ? "0 10px 30px rgba(0,0,0,0.12)" : "none",
   };
-
-  const textColor = shouldShowWhiteBar ? "black" : "white";
 
   const linkStyle: React.CSSProperties = {
     color: textColor,
@@ -130,21 +147,14 @@ export default function Header() {
   };
 
   const userLabel =
-    user?.user_metadata?.full_name ||
-    user?.user_metadata?.name ||
-    user?.email ||
-    "Cuenta";
+    user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || "Cuenta";
 
   const logout = async () => {
     setIsAuthBusy(true);
-
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.signOut();
-      if (error) {
-        throw error;
-      }
-
+      if (error) throw error;
       setUser(null);
       router.push("/");
       router.refresh();
@@ -162,7 +172,6 @@ export default function Header() {
       onMouseEnter={isHome ? () => setIsHovered(true) : undefined}
       onMouseLeave={isHome ? () => setIsHovered(false) : undefined}
     >
-      {/* Left: logo + nav */}
       <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
         <Link
           href="/"
@@ -174,9 +183,7 @@ export default function Header() {
           }}
         >
           <img src="/logo4.PNG" alt="EcoWatt" style={{ height: "30px", width: "auto" }} />
-          <span style={{ color: textColor, fontWeight: 700, fontSize: "16px" }}>
-            EcoWatt
-          </span>
+          <span style={{ color: textColor, fontWeight: 700, fontSize: "16px" }}>EcoWatt</span>
         </Link>
 
         <nav style={{ display: "flex", gap: "6px" }}>
@@ -189,7 +196,6 @@ export default function Header() {
         </nav>
       </div>
 
-      {/* Right: cart + auth actions */}
       <div
         style={{
           marginLeft: "auto",
@@ -198,12 +204,7 @@ export default function Header() {
           gap: "10px",
         }}
       >
-        <Link
-          href="/carrito"
-          style={rightBtnStyle}
-          aria-label="Ir al carrito"
-          title="Carrito"
-        >
+        <Link href="/carrito" style={rightBtnStyle} aria-label="Ir al carrito" title="Carrito">
           Carrito
         </Link>
 
