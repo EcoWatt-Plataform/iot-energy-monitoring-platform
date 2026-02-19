@@ -15,10 +15,10 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
     } = await supabase.auth.getUser();
 
     if (error || !user) {
-      redirect("/?auth_error=login_required");
+      redirect("/login?auth_error=login_required&next=/dashboard");
     }
   } catch {
-    redirect("/?auth_error=supabase_not_configured");
+    redirect("/login?auth_error=supabase_not_configured&next=/dashboard");
   }
 
   return <>{children}</>;
