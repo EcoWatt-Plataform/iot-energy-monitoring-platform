@@ -24,10 +24,10 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 1. Copy `frontend/.env.example` to `frontend/.env.local`.
 2. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` with values from Supabase Dashboard > Settings > API.
-3. Keep `NEXT_PUBLIC_SITE_URL` as `http://localhost:3000` in local development.
-4. In Supabase Auth > URL Configuration, add:
-   - Site URL: `http://localhost:3000`
-   - Redirect URL: `http://localhost:3000/auth/callback`
+3. Set `NEXT_PUBLIC_SITE_URL` to the URL where you open the frontend (for example `http://localhost:3000` or `http://192.168.100.134:3000`).
+4. In Supabase Auth > URL Configuration, add the same URL and callback you actually use:
+   - Site URL: `http://localhost:3000` and/or `http://192.168.100.134:3000`
+   - Redirect URL: `http://localhost:3000/auth/callback` and/or `http://192.168.100.134:3000/auth/callback`
 5. In Supabase Auth > Providers > Google, enable Google and configure OAuth credentials.
 
 ## Learn More

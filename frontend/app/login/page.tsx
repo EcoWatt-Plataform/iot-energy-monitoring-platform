@@ -2,10 +2,13 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import LoginForm from "./login-form";
 
+type LoginMode = "login" | "recovery";
+
 type LoginPageProps = {
   searchParams: Promise<{
     auth_error?: string;
     next?: string;
+    mode?: string;
   }>;
 };
 
@@ -21,6 +24,7 @@ function getErrorText(code: string | undefined) {
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
   const next = params.next && params.next.startsWith("/") ? params.next : "/dashboard";
+  const mode: LoginMode = params.mode === "recovery" ? "recovery" : "login";
 
   try {
     const supabase = await createClient();
@@ -28,12 +32,18 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (user) {
+    if (user && mode !== "recovery") {
       redirect(next);
     }
   } catch {
     // Continue to render the login page if Supabase env is missing.
   }
 
-  return <LoginForm initialError={getErrorText(params.auth_error)} nextPath={next} />;
+  return (
+    <LoginForm
+      initialError={getErrorText(params.auth_error)}
+      nextPath={next}
+      initialMode={mode}
+    />
+  );
 }

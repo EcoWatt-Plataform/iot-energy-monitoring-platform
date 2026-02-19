@@ -13,6 +13,7 @@ import {
   Title,
 } from "chart.js";
 import { Line, Bar } from "react-chartjs-2";
+import { createClient } from "@/lib/supabase/client";
 
 ChartJS.register(
   CategoryScale,
@@ -127,6 +128,8 @@ function sumMonthly(points: DailyPoint[]) {
 }
 
 export default function DashboardPage() {
+  const supabase = useMemo(() => createClient(), []);
+
   // SIMULACIÓN DE PLAN (para probar sin login)
   const [plan, setPlan] = useState<Plan>("basico");
 
@@ -182,9 +185,33 @@ export default function DashboardPage() {
   /** =========================
    *  FETCHES
    *  ========================= */
+  async function getAccessToken() {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      throw new Error(error.message || "No se pudo validar la sesion.");
+    }
+
+    const token = data.session?.access_token;
+    if (!token) {
+      throw new Error("Sesion expirada. Inicia sesion nuevamente.");
+    }
+
+    return token;
+  }
+
+  async function authFetch(url: string, init: RequestInit = {}) {
+    const token = await getAccessToken();
+    const headers = new Headers(init.headers ?? {});
+    headers.set("Authorization", `Bearer ${token}`);
+
+    return fetch(url, {
+      ...init,
+      headers,
+    });
+  }
 
   async function loadDevices() {
-    const res = await fetch("/api/v1/devices");
+    const res = await authFetch("/api/v1/devices");
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Error cargando dispositivos");
     setDevices(Array.isArray(data) ? data : []);
@@ -194,7 +221,7 @@ export default function DashboardPage() {
     let url = `/api/v1/metrics/summary_month?month=${encodeURIComponent(nextMonth)}`;
     if (nextDeviceId !== null) url += `&device_id=${nextDeviceId}`;
 
-    const res = await fetch(url);
+    const res = await authFetch(url);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Error cargando resumen");
     setSummary(data);
@@ -213,7 +240,7 @@ export default function DashboardPage() {
         nextMonth
       )}&device_id=${nextDeviceId}`;
 
-      const res = await fetch(url);
+      const res = await authFetch(url);
       const text = await res.text();
 
       if (!res.ok) throw new Error(`Error cargando CSV diario (${res.status}).`);
@@ -234,7 +261,7 @@ export default function DashboardPage() {
         const url = `/api/v1/export/daily.csv?month=${encodeURIComponent(
           nextMonth
         )}&device_id=${d.id}`;
-        const res = await fetch(url);
+        const res = await authFetch(url);
         const text = await res.text();
         if (!res.ok) return [d.id, [] as DailyPoint[]] as const;
         return [d.id, parseDailyCsv(text)] as const;

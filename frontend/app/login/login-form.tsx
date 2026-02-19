@@ -1,16 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+
+type Mode = "login" | "register" | "recovery";
 
 type LoginFormProps = {
   initialError: string | null;
   nextPath: string;
+  initialMode?: Mode;
 };
 
-type Mode = "login" | "register";
 type DocumentType = "DNI" | "CUIT";
 
 type RegisterForm = {
@@ -50,15 +52,24 @@ function normalizeNextPath(nextPath: string) {
   return nextPath;
 }
 
-export default function LoginForm({ initialError, nextPath }: LoginFormProps) {
+export default function LoginForm({
+  initialError,
+  nextPath,
+  initialMode = "login",
+}: LoginFormProps) {
   const router = useRouter();
   const safeNextPath = useMemo(() => normalizeNextPath(nextPath), [nextPath]);
 
-  const [mode, setMode] = useState<Mode>("login");
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [recoveryPassword, setRecoveryPassword] = useState("");
+  const [recoveryConfirmPassword, setRecoveryConfirmPassword] = useState("");
+  const [hasRecoverySession, setHasRecoverySession] = useState(false);
   const [registerForm, setRegisterForm] = useState<RegisterForm>(INITIAL_REGISTER_FORM);
-  const [busyAction, setBusyAction] = useState<null | "google" | "login" | "register">(null);
+  const [busyAction, setBusyAction] = useState<
+    null | "google" | "login" | "register" | "recovery" | "updatePassword"
+  >(null);
   const [errorText, setErrorText] = useState<string | null>(initialError);
   const [successText, setSuccessText] = useState<string | null>(null);
 
@@ -119,10 +130,60 @@ export default function LoginForm({ initialError, nextPath }: LoginFormProps) {
   }
 
   function getAuthBaseUrl() {
-    const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-    const baseUrl = configuredSiteUrl || window.location.origin;
+    const runtimeOrigin =
+      typeof window !== "undefined" ? window.location.origin : "";
+    const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || "";
+    const baseUrl = configuredSiteUrl || runtimeOrigin;
     return baseUrl.replace(/\/$/, "");
   }
+
+  useEffect(() => {
+    if (mode !== "recovery") {
+      setHasRecoverySession(false);
+      return;
+    }
+
+    let mounted = true;
+    let unsubscribe: (() => void) | null = null;
+
+    async function syncRecoverySession() {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (mounted) {
+          setHasRecoverySession(Boolean(user));
+        }
+
+        const {
+          data: { subscription },
+        } = supabase.auth.onAuthStateChange((event, session) => {
+          if (!mounted) return;
+          if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+            setHasRecoverySession(Boolean(session?.user));
+          }
+        });
+
+        unsubscribe = () => subscription.unsubscribe();
+      } catch (error) {
+        console.error(error);
+        if (mounted) {
+          setHasRecoverySession(false);
+        }
+      }
+    }
+
+    syncRecoverySession();
+
+    return () => {
+      mounted = false;
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [mode]);
 
   async function loginWithGoogle() {
     clearAlerts();
@@ -176,6 +237,89 @@ export default function LoginForm({ initialError, nextPath }: LoginFormProps) {
         error instanceof Error
           ? error.message
           : "No se pudo iniciar sesion con email y contrasena.";
+      setErrorText(message);
+      setBusyAction(null);
+    }
+  }
+
+  async function sendRecoveryEmail(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    clearAlerts();
+
+    const email = loginEmail.trim();
+    if (!email) {
+      setErrorText("Ingresa tu email para recuperar la contrasena.");
+      return;
+    }
+
+    setBusyAction("recovery");
+
+    try {
+      const supabase = createClient();
+      const normalizedBaseUrl = getAuthBaseUrl();
+      const recoveryNext = "/login?mode=recovery";
+      const callbackUrl = `${normalizedBaseUrl}/auth/callback?next=${encodeURIComponent(
+        recoveryNext
+      )}`;
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: callbackUrl,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setSuccessText("Te enviamos un enlace para recuperar tu contrasena.");
+      setBusyAction(null);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No se pudo enviar el enlace de recuperacion.";
+      setErrorText(message);
+      setBusyAction(null);
+    }
+  }
+
+  async function updatePasswordAfterRecovery(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    clearAlerts();
+
+    if (recoveryPassword.length < 8) {
+      setErrorText("La nueva contrasena debe tener al menos 8 caracteres.");
+      return;
+    }
+
+    if (recoveryPassword !== recoveryConfirmPassword) {
+      setErrorText("Las nuevas contrasenas no coinciden.");
+      return;
+    }
+
+    setBusyAction("updatePassword");
+
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({
+        password: recoveryPassword,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setSuccessText("Contrasena actualizada. Ya puedes ingresar.");
+      setRecoveryPassword("");
+      setRecoveryConfirmPassword("");
+      setBusyAction(null);
+      setMode("login");
+      router.push(safeNextPath);
+      router.refresh();
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No se pudo actualizar la contrasena.";
       setErrorText(message);
       setBusyAction(null);
     }
@@ -292,15 +436,32 @@ export default function LoginForm({ initialError, nextPath }: LoginFormProps) {
           >
             Crear cuenta
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode("recovery");
+              clearAlerts();
+            }}
+            style={modeButtonStyle(mode === "recovery")}
+            disabled={isBusy}
+          >
+            Recuperar contrasena
+          </button>
         </div>
 
         <h1 style={{ margin: 0, fontSize: "30px", lineHeight: 1.15 }}>
-          {mode === "login" ? "Iniciar sesion" : "Crear cuenta en EcoWatt"}
+          {mode === "login"
+            ? "Iniciar sesion"
+            : mode === "register"
+              ? "Crear cuenta en EcoWatt"
+              : "Recuperar contrasena"}
         </h1>
         <p style={{ margin: "10px 0 0", color: "#4b5563" }}>
           {mode === "login"
             ? "Elige como quieres ingresar a tu cuenta."
-            : "Completa tus datos para crear tu cuenta personal."}
+            : mode === "register"
+              ? "Completa tus datos para crear tu cuenta personal."
+              : "Te enviaremos un enlace para recuperar el acceso."}
         </p>
 
         {errorText && (
@@ -405,9 +566,30 @@ export default function LoginForm({ initialError, nextPath }: LoginFormProps) {
               >
                 {busyAction === "login" ? "Ingresando..." : "Ingresar con email"}
               </button>
+
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={() => {
+                  setMode("recovery");
+                  clearAlerts();
+                }}
+                style={{
+                  marginTop: "10px",
+                  border: "none",
+                  background: "transparent",
+                  color: "#2563eb",
+                  fontSize: "13px",
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                  padding: 0,
+                }}
+              >
+                Olvide mi contrasena
+              </button>
             </form>
           </>
-        ) : (
+        ) : mode === "register" ? (
           <form onSubmit={registerWithEmail} style={{ marginTop: "16px" }}>
             <div
               style={{
@@ -638,6 +820,94 @@ export default function LoginForm({ initialError, nextPath }: LoginFormProps) {
             >
               {busyAction === "register" ? "Creando cuenta..." : "Crear cuenta"}
             </button>
+          </form>
+        ) : (
+          <form
+            onSubmit={hasRecoverySession ? updatePasswordAfterRecovery : sendRecoveryEmail}
+            style={{ marginTop: "16px" }}
+          >
+            {hasRecoverySession ? (
+              <>
+                <p style={{ margin: "0 0 12px", color: "#4b5563", fontSize: "14px" }}>
+                  Ya validamos tu enlace. Define una nueva contrasena.
+                </p>
+
+                <label
+                  style={{ display: "block", fontSize: "13px", color: "#374151", marginBottom: "6px" }}
+                >
+                  Nueva contrasena
+                </label>
+                <input
+                  type="password"
+                  value={recoveryPassword}
+                  onChange={(e) => setRecoveryPassword(e.target.value)}
+                  minLength={8}
+                  required
+                  autoComplete="new-password"
+                  style={inputStyle}
+                />
+
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "13px",
+                    color: "#374151",
+                    marginBottom: "6px",
+                    marginTop: "12px",
+                  }}
+                >
+                  Confirmar nueva contrasena
+                </label>
+                <input
+                  type="password"
+                  value={recoveryConfirmPassword}
+                  onChange={(e) => setRecoveryConfirmPassword(e.target.value)}
+                  minLength={8}
+                  required
+                  autoComplete="new-password"
+                  style={inputStyle}
+                />
+
+                <button
+                  type="submit"
+                  disabled={isBusy}
+                  style={{ ...buttonStyle, marginTop: "14px" }}
+                >
+                  {busyAction === "updatePassword"
+                    ? "Actualizando..."
+                    : "Actualizar contrasena"}
+                </button>
+              </>
+            ) : (
+              <>
+                <p style={{ margin: "0 0 12px", color: "#4b5563", fontSize: "14px" }}>
+                  Ingresa tu email y te enviaremos un enlace de recuperacion.
+                </p>
+
+                <label
+                  style={{ display: "block", fontSize: "13px", color: "#374151", marginBottom: "6px" }}
+                >
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  placeholder="tu@email.com"
+                  autoComplete="email"
+                  required
+                  style={inputStyle}
+                />
+
+                <button
+                  type="submit"
+                  disabled={isBusy}
+                  style={{ ...buttonStyle, marginTop: "14px" }}
+                >
+                  {busyAction === "recovery" ? "Enviando..." : "Enviar enlace de recuperacion"}
+                </button>
+              </>
+            )}
           </form>
         )}
 
