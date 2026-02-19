@@ -1,19 +1,67 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 
 export default function Header() {
+  const router = useRouter();
   const pathname = usePathname();
   const isHome = pathname === "/";
 
-  // true cuando el mouse está encima del header
+  // true when the mouse is over the header
   const [isHovered, setIsHovered] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isAuthBusy, setIsAuthBusy] = useState(false);
 
-  // En Home: transparente al inicio y cambia con hover.
-  // En otras páginas: fondo blanco siempre.
+  useEffect(() => {
+    let mounted = true;
+    let unsubscribe: (() => void) | null = null;
+
+    async function initAuth() {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.auth.getUser();
+        if (error) {
+          console.error(error);
+        }
+
+        if (mounted) {
+          setUser(data.user ?? null);
+          setAuthLoading(false);
+        }
+
+        const {
+          data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, session) => {
+          if (!mounted) return;
+          setUser(session?.user ?? null);
+        });
+
+        unsubscribe = () => subscription.unsubscribe();
+      } catch (error) {
+        console.error(error);
+        if (mounted) {
+          setAuthLoading(false);
+        }
+      }
+    }
+
+    initAuth();
+
+    return () => {
+      mounted = false;
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, []);
+
+  // On Home: transparent by default and changes on hover.
+  // On other pages: white background.
   const shouldShowWhiteBar = !isHome || isHovered;
 
   const headerStyle: React.CSSProperties = {
@@ -66,27 +114,76 @@ export default function Header() {
     font: "inherit",
   };
 
+  const userBadgeStyle: React.CSSProperties = {
+    color: textColor,
+    border: `1px solid ${
+      shouldShowWhiteBar ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.45)"
+    }`,
+    background: shouldShowWhiteBar ? "rgba(0,0,0,0.04)" : "rgba(0,0,0,0.2)",
+    padding: "8px 10px",
+    borderRadius: "10px",
+    fontSize: "13px",
+    maxWidth: "220px",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  };
+
+  const userLabel =
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.email ||
+    "Cuenta";
+
   const login = async () => {
+    setIsAuthBusy(true);
+
     const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
     const baseUrl = configuredSiteUrl || window.location.origin;
     const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
 
     try {
       const supabase = createClient();
-      await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: `${normalizedBaseUrl}/auth/callback`,
         },
       });
+
+      if (error) {
+        throw error;
+      }
     } catch (error) {
       console.error(error);
       window.alert(
-        "Falta configurar Supabase en frontend/.env.local (NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY)."
+        "No se pudo iniciar sesion con Google. Revisa frontend/.env.local y la configuracion de OAuth en Supabase."
       );
+    } finally {
+      setIsAuthBusy(false);
     }
   };
 
+  const logout = async () => {
+    setIsAuthBusy(true);
+
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        throw error;
+      }
+
+      setUser(null);
+      router.push("/");
+      router.refresh();
+    } catch (error) {
+      console.error(error);
+      window.alert("No se pudo cerrar sesion. Intenta nuevamente.");
+    } finally {
+      setIsAuthBusy(false);
+    }
+  };
 
   return (
     <header
@@ -94,7 +191,7 @@ export default function Header() {
       onMouseEnter={isHome ? () => setIsHovered(true) : undefined}
       onMouseLeave={isHome ? () => setIsHovered(false) : undefined}
     >
-      {/* Izquierda: Logo + menú pegado al logo */}
+      {/* Left: logo + nav */}
       <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
         <Link
           href="/"
@@ -121,7 +218,7 @@ export default function Header() {
         </nav>
       </div>
 
-      {/* Derecha: Carrito + Login */}
+      {/* Right: cart + auth actions */}
       <div
         style={{
           marginLeft: "auto",
@@ -138,10 +235,26 @@ export default function Header() {
         >
           Carrito
         </Link>
-        
-        <button type="button" onClick={login} style={buttonStyle}>
-          Ingresar con Google
-        </button>
+
+        {authLoading ? (
+          <span style={userBadgeStyle}>Cargando sesion...</span>
+        ) : user ? (
+          <>
+            <span style={userBadgeStyle} title={String(userLabel)}>
+              {String(userLabel)}
+            </span>
+            <Link href="/dashboard" style={rightBtnStyle}>
+              Dashboard
+            </Link>
+            <button type="button" onClick={logout} disabled={isAuthBusy} style={buttonStyle}>
+              {isAuthBusy ? "Cerrando..." : "Cerrar sesion"}
+            </button>
+          </>
+        ) : (
+          <button type="button" onClick={login} disabled={isAuthBusy} style={buttonStyle}>
+            {isAuthBusy ? "Redirigiendo..." : "Ingresar con Google"}
+          </button>
+        )}
       </div>
     </header>
   );
