@@ -15,11 +15,12 @@ export default function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
-    if(!isHome){
-        setIsHovered
-        setIsScrolled(true);
-        return;
+    if (!isHome) {
+      setIsHovered(false);     
+      setIsScrolled(true);
+      return;
     }
+
     function onScroll() {
       setIsScrolled(window.scrollY > 10);
     }
@@ -62,17 +63,8 @@ export default function Header() {
     fontWeight: 500,
   };
 
-  const rightBtnStyle: React.CSSProperties = {
-    color: textColor,
-    textDecoration: "none",
-    border: `1px solid ${
-      shouldShowWhiteBar ? "rgba(0,0,0,0.25)" : "rgba(255,255,255,0.65)"
-    }`,
-    padding: "8px 12px",
-    borderRadius: "10px",
-    transition: "all 160ms ease",
-    fontWeight: 500,
-  };
+  // ✅ esto es lo único que necesitamos para los íconos PNG
+  const iconFilter = shouldShowWhiteBar ? "invert(0)" : "invert(1)";
 
   return (
     <header
@@ -98,36 +90,48 @@ export default function Header() {
         </Link>
 
         <nav style={{ display: "flex", gap: "6px" }}>
-          <Link href="/planes" style={linkStyle}>
-            Planes
-          </Link>
-          <Link href="/soporte" style={linkStyle}>
-            Soporte
-          </Link>
+          <Link href="/planes" style={linkStyle}>Planes</Link>
+          <Link href="/soporte" style={linkStyle}>Soporte</Link>
         </nav>
       </div>
 
       {/* Derecha: Carrito + Login */}
-      <div
-        style={{
-          marginLeft: "auto",
-          display: "flex",
-          alignItems: "center",
-          gap: "10px",
-        }}
-      >
-        <Link
-          href="/carrito"
-          style={rightBtnStyle}
-          aria-label="Ir al carrito"
-          title="Carrito"
-        >
-          Carrito
-        </Link>
+      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px" }}>
+        <a href="/carrito">
+          <img
+            src="/ImgCarrito.png"
+            alt="Carrito"
+            style={{
+              width: "22px",
+              height: "22px",
+              filter: iconFilter,          // cambia con el header
+              transition: "0.2s",
+            }}
+          />
+        </a>
 
-        <Link href="/login" style={rightBtnStyle}>
-          Iniciar sesión
-        </Link>
+        <a
+          href="/login"
+          style={{
+            width: "38px",
+            height: "38px",
+            borderRadius: "999px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "0.2s",
+          }}
+        >
+          <img
+            src="/IniciarSesion.png"
+            alt="Login"
+            style={{
+              width: "20px",
+              filter: iconFilter,          // cambia con el header
+              transition: "0.2s",
+            }}
+          />
+        </a>
       </div>
     </header>
   );

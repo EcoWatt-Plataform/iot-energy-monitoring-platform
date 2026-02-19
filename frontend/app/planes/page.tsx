@@ -33,7 +33,7 @@ export default function PlanesPage() {
           name="Básico"
           imageSrc="/basico.jpeg"
           tagline="Ideal para empezar"
-          features={["Hasta 1 dispositivo", "Consumo en tiempo real", "Historial básico"]}
+          features={["Consumo en tiempo real", "Historial básico"]}
           href="/planes/basico"
         />
 
@@ -41,11 +41,7 @@ export default function PlanesPage() {
           name="Avanzado"
           imageSrc="/avanzado.jpeg"
           tagline="Para hogares"
-          features={[
-            "Hasta 5 dispositivos",
-            "Gráficos día/semana/mes",
-            "Historial extendido",
-          ]}
+          features={["Gráficos día/semana/mes", "Historial extendido",]}
           href="/planes/avanzado"
         />
 
@@ -53,7 +49,7 @@ export default function PlanesPage() {
           name="Premium"
           imageSrc="/premium.jpeg"
           tagline="Monitoreo completo"
-          features={["Hasta 20 dispositivos", "Alertas avanzadas", "Reportes detallados"]}
+          features={["Alertas avanzadas", "Reportes detallados"]}
           href="/planes/premium"
           recommended
         />

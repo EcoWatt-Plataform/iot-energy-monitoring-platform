@@ -36,6 +36,8 @@ export default function CheckoutPage() {
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
 
+  const [usageDetails, setUsageDetails] = useState("");
+
   // =============================
   // DETECTAR MOBILE
   // =============================
@@ -94,6 +96,7 @@ export default function CheckoutPage() {
       buyer: {
         fullName: fullName.trim(),
         email: email.trim(),
+        usageDetails: usageDetails.trim(),
       },
       cart,
       totals: { subtotal },
@@ -179,6 +182,19 @@ export default function CheckoutPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               style={input}
+            />
+          </Field>
+
+          <Field label="¿Para qué y dónde lo vas a usar?">
+            <textarea
+              value={usageDetails}
+              onChange={(e) => setUsageDetails(e.target.value)}
+              placeholder="Ej: Cocina y living del local, heladera, horno eléctrico, iluminación..."
+              style={{
+                ...input,
+                minHeight: "100px",
+                resize: "vertical",
+              }}
             />
           </Field>
 
