@@ -135,35 +135,6 @@ export default function Header() {
     user?.email ||
     "Cuenta";
 
-  const login = async () => {
-    setIsAuthBusy(true);
-
-    const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-    const baseUrl = configuredSiteUrl || window.location.origin;
-    const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
-
-    try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${normalizedBaseUrl}/auth/callback`,
-        },
-      });
-
-      if (error) {
-        throw error;
-      }
-    } catch (error) {
-      console.error(error);
-      window.alert(
-        "No se pudo iniciar sesion con Google. Revisa frontend/.env.local y la configuracion de OAuth en Supabase."
-      );
-    } finally {
-      setIsAuthBusy(false);
-    }
-  };
-
   const logout = async () => {
     setIsAuthBusy(true);
 
@@ -251,9 +222,9 @@ export default function Header() {
             </button>
           </>
         ) : (
-          <button type="button" onClick={login} disabled={isAuthBusy} style={buttonStyle}>
-            {isAuthBusy ? "Redirigiendo..." : "Ingresar con Google"}
-          </button>
+          <Link href="/login" style={rightBtnStyle}>
+            Iniciar sesion
+          </Link>
         )}
       </div>
     </header>
