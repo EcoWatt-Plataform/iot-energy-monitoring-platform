@@ -34,6 +34,25 @@ type DownloadKind = "monthly" | "daily" | "alerts";
 type Device = { id: number; name: string };
 
 type DailyPoint = { date: string; kwh: number };
+type DailyChartDataset = {
+  label: string;
+  data: number[];
+  borderColor: string;
+  backgroundColor: string;
+  pointRadius: number;
+  tension: number;
+};
+type DailyChartData = { labels: string[]; datasets: DailyChartDataset[] };
+type BarChartDataset = {
+  label: string;
+  data: number[];
+  borderColor?: string | string[];
+  backgroundColor?: string | string[];
+  borderWidth?: number;
+};
+type BarChartData = { labels: string[]; datasets: BarChartDataset[] };
+type DailyMetricsDay = { day?: string; energy_kwh?: number; energy_wh?: number };
+type DailyMetricsResponse = { days?: DailyMetricsDay[]; error?: string };
 
 type SummaryDevice = {
   id: number;
@@ -130,6 +149,23 @@ function toYYYYMM(d: Date) {
   return `${y}-${m}`;
 }
 
+function monthDateRange(month: string) {
+  const [yRaw, mRaw] = month.split("-");
+  const y = Number(yRaw);
+  const m = Number(mRaw);
+
+  if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12) {
+    throw new Error("Mes invalido. Usa formato YYYY-MM.");
+  }
+
+  const lastDay = new Date(y, m, 0).getDate();
+  const mm = String(m).padStart(2, "0");
+  return {
+    from: `${y}-${mm}-01`,
+    to: `${y}-${mm}-${String(lastDay).padStart(2, "0")}`,
+  };
+}
+
 function getErrorMessage(error: unknown, fallback = "Error") {
   if (error instanceof Error && error.message) return error.message;
   return fallback;
@@ -137,6 +173,32 @@ function getErrorMessage(error: unknown, fallback = "Error") {
 
 function startOfWeekLabel(isoDate: string) {
   return `Semana de ${isoDate}`;
+}
+
+const DAILY_WINDOW_SIZE_MOBILE = 7;
+const WEEKLY_WINDOW_SIZE_MOBILE = 4;
+const MONTHLY_WINDOW_SIZE_MOBILE = 5;
+const COMPARE_WINDOW_SIZE_MOBILE = 5;
+
+function sliceBarChartWindow(
+  data: BarChartData,
+  start: number,
+  size: number
+): BarChartData {
+  const end = start + size;
+  return {
+    labels: data.labels.slice(start, end),
+    datasets: data.datasets.map((dataset) => ({
+      ...dataset,
+      data: dataset.data.slice(start, end),
+      backgroundColor: Array.isArray(dataset.backgroundColor)
+        ? dataset.backgroundColor.slice(start, end)
+        : dataset.backgroundColor,
+      borderColor: Array.isArray(dataset.borderColor)
+        ? dataset.borderColor.slice(start, end)
+        : dataset.borderColor,
+    })),
+  };
 }
 
 /** =========================
@@ -161,38 +223,6 @@ function withAlpha(hex: string, alpha: number) {
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   return `rgba(${r},${g},${b},${alpha})`;
-}
-
-/** =========================
- *  CSV PARSER (daily.csv)
- *  ========================= */
-function parseDailyCsv(text: string): DailyPoint[] {
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length <= 1) return [];
-
-  const header = lines[0];
-  const sep = header.includes(";") ? ";" : ",";
-  const cols = header.split(sep).map((s) => s.trim().toLowerCase());
-
-  const dateIdx = cols.findIndex(
-    (c) => c.includes("date") || c.includes("day") || c.includes("fecha")
-  );
-  const kwhIdx = cols.findIndex((c) => c.includes("kwh"));
-
-  const safeDateIdx = dateIdx >= 0 ? dateIdx : 0;
-  const safeKwhIdx = kwhIdx >= 0 ? kwhIdx : 1;
-
-  const out: DailyPoint[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const row = lines[i].split(sep).map((s) => s.trim());
-    const date = row[safeDateIdx];
-    const raw = row[safeKwhIdx];
-    if (!date) continue;
-
-    const num = Number(String(raw).replace(",", "."));
-    if (Number.isFinite(num)) out.push({ date, kwh: num });
-  }
-  return out;
 }
 
 function groupWeekly(points: DailyPoint[]) {
@@ -243,6 +273,12 @@ export default function DashboardPage() {
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [hasLoadedDaily, setHasLoadedDaily] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [dailyWindowStart, setDailyWindowStart] = useState(0);
+  const [weeklyWindowStart, setWeeklyWindowStart] = useState(0);
+  const [monthlyWindowStart, setMonthlyWindowStart] = useState(0);
+  const [compareWindowStart, setCompareWindowStart] = useState(0);
   const [chartAnimationSeed, setChartAnimationSeed] = useState(0);
 
   // Selector de período (según plan)
@@ -400,25 +436,43 @@ export default function DashboardPage() {
     setSummary(data);
   }
 
+  function toDailyPoints(payload: DailyMetricsResponse): DailyPoint[] {
+    const days = Array.isArray(payload.days) ? payload.days : [];
+    return days
+      .map((d) => {
+        const date = String(d.day || "");
+        const kwh =
+          d.energy_kwh !== undefined
+            ? Number(d.energy_kwh)
+            : Number(d.energy_wh || 0) / 1000;
+        return { date, kwh };
+      })
+      .filter((d) => d.date && Number.isFinite(d.kwh));
+  }
+
+  async function fetchDailyForDevice(deviceId: number, nextMonth: string) {
+    const { from, to } = monthDateRange(nextMonth);
+    const url = `/api/v1/metrics/daily?device_id=${deviceId}&from=${from}&to=${to}`;
+
+    const res = await authFetch(url);
+    const data = (await res.json()) as DailyMetricsResponse;
+    if (!res.ok) {
+      throw new Error(data.error || `Error cargando métricas diarias (${res.status}).`);
+    }
+    return toDailyPoints(data);
+  }
+
   /**
    * Diario:
-   * - Si hay device seleccionado -> baja 1 CSV y llena daily
-   * - Si es "Todos" -> baja CSV de cada device y llena dailyByDevice
+   * - Si hay device seleccionado -> usa /metrics/daily
+   * - Si es "Todos" -> consulta /metrics/daily por cada device
    */
   async function loadDaily(nextMonth = month, nextDeviceId = selectedDeviceId) {
     // Caso A: Un dispositivo
     if (nextDeviceId !== null) {
       setDailyByDevice({});
-      const url = `/api/v1/export/daily.csv?month=${encodeURIComponent(
-        nextMonth
-      )}&device_id=${nextDeviceId}`;
-
-      const res = await authFetch(url);
-      const text = await res.text();
-
-      if (!res.ok) throw new Error(`Error cargando CSV diario (${res.status}).`);
-
-      setDaily(parseDailyCsv(text));
+      const points = await fetchDailyForDevice(nextDeviceId, nextMonth);
+      setDaily(points);
       return;
     }
 
@@ -431,28 +485,33 @@ export default function DashboardPage() {
 
     const entries = await Promise.all(
       devices.map(async (d) => {
-        const url = `/api/v1/export/daily.csv?month=${encodeURIComponent(
-          nextMonth
-        )}&device_id=${d.id}`;
-        const res = await authFetch(url);
-        const text = await res.text();
-        if (!res.ok) return [d.id, [] as DailyPoint[]] as const;
-        return [d.id, parseDailyCsv(text)] as const;
+        try {
+          const points = await fetchDailyForDevice(d.id, nextMonth);
+          return { deviceId: d.id, points, failed: false } as const;
+        } catch {
+          return { deviceId: d.id, points: [] as DailyPoint[], failed: true } as const;
+        }
       })
     );
 
+    if (entries.every((e) => e.failed)) {
+      throw new Error("No se pudieron cargar las métricas diarias. Intenta refrescar.");
+    }
+
     const obj: Record<number, DailyPoint[]> = {};
-    for (const [id, pts] of entries) obj[id] = pts;
+    for (const entry of entries) obj[entry.deviceId] = entry.points;
     setDailyByDevice(obj);
   }
 
   async function refreshAll() {
     setLoading(true);
+    setHasLoadedDaily(false);
     setErr(null);
     setSummary(null);
     try {
       await loadSummary(month, selectedDeviceId);
       await loadDaily(month, selectedDeviceId);
+      setHasLoadedDaily(true);
     } catch (e: unknown) {
       setErr(getErrorMessage(e));
     } finally {
@@ -468,6 +527,16 @@ export default function DashboardPage() {
         setErr(getErrorMessage(e));
       }
     })();
+  }, []);
+
+  useEffect(() => {
+    function onResize() {
+      setIsMobileViewport(window.innerWidth < 768);
+    }
+
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   useEffect(() => {
@@ -525,7 +594,7 @@ export default function DashboardPage() {
    *  ========================= */
 
   // ---------- DAILY ----------
-  const dailyLineData = useMemo(() => {
+  const dailyLineData = useMemo<DailyChartData>(() => {
     // 1 device
     if (selectedDeviceId !== null) {
       const color = "#6992EB";
@@ -571,8 +640,53 @@ export default function DashboardPage() {
     return { labels, datasets };
   }, [selectedDeviceId, daily, devices, dailyByDevice]);
 
+  const totalDailyPoints = dailyLineData.labels.length;
+  const dailyWindowSize = isMobileViewport
+    ? Math.min(DAILY_WINDOW_SIZE_MOBILE, Math.max(1, totalDailyPoints))
+    : totalDailyPoints;
+  const maxDailyWindowStart = Math.max(0, totalDailyPoints - dailyWindowSize);
+  const clampedDailyWindowStart = Math.min(dailyWindowStart, maxDailyWindowStart);
+
+  useEffect(() => {
+    if (!isMobileViewport) {
+      setDailyWindowStart(0);
+      return;
+    }
+    setDailyWindowStart(maxDailyWindowStart);
+  }, [isMobileViewport, maxDailyWindowStart, month, selectedDeviceId]);
+
+  const dailyChartData = useMemo<DailyChartData>(() => {
+    if (!isMobileViewport || totalDailyPoints <= DAILY_WINDOW_SIZE_MOBILE) {
+      return dailyLineData;
+    }
+
+    const start = clampedDailyWindowStart;
+    const end = start + dailyWindowSize;
+    return {
+      labels: dailyLineData.labels.slice(start, end),
+      datasets: dailyLineData.datasets.map((dataset) => ({
+        ...dataset,
+        data: dataset.data.slice(start, end),
+      })),
+    };
+  }, [
+    clampedDailyWindowStart,
+    dailyLineData,
+    dailyWindowSize,
+    isMobileViewport,
+    totalDailyPoints,
+  ]);
+
+  const dailyWindowLabel =
+    totalDailyPoints === 0
+      ? ""
+      : `${clampedDailyWindowStart + 1}-${Math.min(
+          totalDailyPoints,
+          clampedDailyWindowStart + dailyWindowSize
+        )} de ${totalDailyPoints}`;
+
   // ---------- WEEKLY ----------
-  const weeklyBarData = useMemo(() => {
+  const weeklyBarData = useMemo<BarChartData>(() => {
     // 1 device: barras por semana
     if (selectedDeviceId !== null) {
       const items = groupWeekly(daily);
@@ -616,8 +730,48 @@ export default function DashboardPage() {
     return { labels, datasets };
   }, [selectedDeviceId, daily, devices, dailyByDevice]);
 
+  const totalWeeklyPoints = weeklyBarData.labels.length;
+  const weeklyWindowSize = isMobileViewport
+    ? Math.min(WEEKLY_WINDOW_SIZE_MOBILE, Math.max(1, totalWeeklyPoints))
+    : totalWeeklyPoints;
+  const maxWeeklyWindowStart = Math.max(0, totalWeeklyPoints - weeklyWindowSize);
+  const clampedWeeklyWindowStart = Math.min(weeklyWindowStart, maxWeeklyWindowStart);
+
+  useEffect(() => {
+    if (!isMobileViewport) {
+      setWeeklyWindowStart(0);
+      return;
+    }
+    setWeeklyWindowStart(maxWeeklyWindowStart);
+  }, [isMobileViewport, maxWeeklyWindowStart, month, selectedDeviceId]);
+
+  const weeklyChartData = useMemo<BarChartData>(() => {
+    if (!isMobileViewport || totalWeeklyPoints <= WEEKLY_WINDOW_SIZE_MOBILE) {
+      return weeklyBarData;
+    }
+    return sliceBarChartWindow(
+      weeklyBarData,
+      clampedWeeklyWindowStart,
+      weeklyWindowSize
+    );
+  }, [
+    clampedWeeklyWindowStart,
+    isMobileViewport,
+    totalWeeklyPoints,
+    weeklyBarData,
+    weeklyWindowSize,
+  ]);
+
+  const weeklyWindowLabel =
+    totalWeeklyPoints === 0
+      ? ""
+      : `${clampedWeeklyWindowStart + 1}-${Math.min(
+          totalWeeklyPoints,
+          clampedWeeklyWindowStart + weeklyWindowSize
+        )} de ${totalWeeklyPoints}`;
+
   // ---------- MONTHLY ----------
-  const monthlyBarData = useMemo(() => {
+  const monthlyBarData = useMemo<BarChartData>(() => {
     // 1 device: 1 barra
     if (selectedDeviceId !== null) {
       const sum = sumMonthly(daily);
@@ -655,6 +809,105 @@ export default function DashboardPage() {
     };
   }, [selectedDeviceId, daily, devices, dailyByDevice, month]);
 
+  const totalMonthlyPoints = monthlyBarData.labels.length;
+  const monthlyWindowSize = isMobileViewport
+    ? Math.min(MONTHLY_WINDOW_SIZE_MOBILE, Math.max(1, totalMonthlyPoints))
+    : totalMonthlyPoints;
+  const maxMonthlyWindowStart = Math.max(0, totalMonthlyPoints - monthlyWindowSize);
+  const clampedMonthlyWindowStart = Math.min(monthlyWindowStart, maxMonthlyWindowStart);
+
+  useEffect(() => {
+    if (!isMobileViewport) {
+      setMonthlyWindowStart(0);
+      return;
+    }
+    setMonthlyWindowStart(maxMonthlyWindowStart);
+  }, [isMobileViewport, maxMonthlyWindowStart, month, selectedDeviceId]);
+
+  const monthlyChartData = useMemo<BarChartData>(() => {
+    if (!isMobileViewport || totalMonthlyPoints <= MONTHLY_WINDOW_SIZE_MOBILE) {
+      return monthlyBarData;
+    }
+    return sliceBarChartWindow(
+      monthlyBarData,
+      clampedMonthlyWindowStart,
+      monthlyWindowSize
+    );
+  }, [
+    clampedMonthlyWindowStart,
+    isMobileViewport,
+    monthlyBarData,
+    monthlyWindowSize,
+    totalMonthlyPoints,
+  ]);
+
+  const monthlyWindowLabel =
+    totalMonthlyPoints === 0
+      ? ""
+      : `${clampedMonthlyWindowStart + 1}-${Math.min(
+          totalMonthlyPoints,
+          clampedMonthlyWindowStart + monthlyWindowSize
+        )} de ${totalMonthlyPoints}`;
+
+  // ---------- COMPARE ----------
+  const compareBarData = useMemo<BarChartData>(() => {
+    const bg = compare.map((_, i) => withAlpha(colorForIndex(i), 0.55));
+    const border = compare.map((_, i) => colorForIndex(i));
+
+    return {
+      labels: compare.map((x) => x.label),
+      datasets: [
+        {
+          label: "Comparativo por dispositivo",
+          data: compare.map((x) => x.value),
+          backgroundColor: bg,
+          borderColor: border,
+          borderWidth: 1,
+        },
+      ],
+    };
+  }, [compare]);
+
+  const totalComparePoints = compareBarData.labels.length;
+  const compareWindowSize = isMobileViewport
+    ? Math.min(COMPARE_WINDOW_SIZE_MOBILE, Math.max(1, totalComparePoints))
+    : totalComparePoints;
+  const maxCompareWindowStart = Math.max(0, totalComparePoints - compareWindowSize);
+  const clampedCompareWindowStart = Math.min(compareWindowStart, maxCompareWindowStart);
+
+  useEffect(() => {
+    if (!isMobileViewport) {
+      setCompareWindowStart(0);
+      return;
+    }
+    setCompareWindowStart(maxCompareWindowStart);
+  }, [isMobileViewport, maxCompareWindowStart, month, selectedDeviceId]);
+
+  const compareChartData = useMemo<BarChartData>(() => {
+    if (!isMobileViewport || totalComparePoints <= COMPARE_WINDOW_SIZE_MOBILE) {
+      return compareBarData;
+    }
+    return sliceBarChartWindow(
+      compareBarData,
+      clampedCompareWindowStart,
+      compareWindowSize
+    );
+  }, [
+    clampedCompareWindowStart,
+    compareBarData,
+    compareWindowSize,
+    isMobileViewport,
+    totalComparePoints,
+  ]);
+
+  const compareWindowLabel =
+    totalComparePoints === 0
+      ? ""
+      : `${clampedCompareWindowStart + 1}-${Math.min(
+          totalComparePoints,
+          clampedCompareWindowStart + compareWindowSize
+        )} de ${totalComparePoints}`;
+
   const commonOptions = useMemo(() => {
     return {
       responsive: true,
@@ -675,57 +928,98 @@ export default function DashboardPage() {
   const dailyOptions = useMemo(() => {
     return {
       ...commonOptions,
+      maintainAspectRatio: !isMobileViewport,
       plugins: {
         ...commonOptions.plugins,
         title: { display: true, text: "Consumo diario (kWh/día)" },
       },
+      scales: {
+        ...commonOptions.scales,
+        x: {
+          ...commonOptions.scales.x,
+          ticks: {
+            ...commonOptions.scales.x.ticks,
+            autoSkip: true,
+            maxTicksLimit: isMobileViewport ? 7 : 14,
+            maxRotation: 0,
+            minRotation: 0,
+          },
+        },
+      },
     };
-  }, [commonOptions]);
+  }, [commonOptions, isMobileViewport]);
 
   const weeklyOptions = useMemo(() => {
     return {
       ...commonOptions,
+      maintainAspectRatio: !isMobileViewport,
       plugins: {
         ...commonOptions.plugins,
         title: { display: true, text: "Consumo semanal" },
       },
+      scales: {
+        ...commonOptions.scales,
+        x: {
+          ...commonOptions.scales.x,
+          ticks: {
+            ...commonOptions.scales.x.ticks,
+            autoSkip: true,
+            maxTicksLimit: isMobileViewport ? WEEKLY_WINDOW_SIZE_MOBILE : 12,
+            maxRotation: 0,
+            minRotation: 0,
+          },
+        },
+      },
     };
-  }, [commonOptions]);
+  }, [commonOptions, isMobileViewport]);
 
   const monthlyOptions = useMemo(() => {
     return {
       ...commonOptions,
+      maintainAspectRatio: !isMobileViewport,
       plugins: {
         ...commonOptions.plugins,
         title: { display: true, text: "Consumo mensual" },
       },
-    };
-  }, [commonOptions]);
-
-  // Comparativo (premium) con colores distintos por barra
-  function makeCompareBar(title: string, items: { label: string; value: number }[]) {
-    const bg = items.map((_, i) => withAlpha(colorForIndex(i), 0.55));
-    const border = items.map((_, i) => colorForIndex(i));
-
-    return {
-      data: {
-        labels: items.map((x) => x.label),
-        datasets: [
-          {
-            label: title,
-            data: items.map((x) => x.value),
-            backgroundColor: bg,
-            borderColor: border,
-            borderWidth: 1,
+      scales: {
+        ...commonOptions.scales,
+        x: {
+          ...commonOptions.scales.x,
+          ticks: {
+            ...commonOptions.scales.x.ticks,
+            autoSkip: true,
+            maxTicksLimit: isMobileViewport ? MONTHLY_WINDOW_SIZE_MOBILE : 12,
+            maxRotation: 0,
+            minRotation: 0,
           },
-        ],
-      },
-      options: {
-        ...commonOptions,
-        plugins: { ...commonOptions.plugins, title: { display: true, text: title } },
+        },
       },
     };
-  }
+  }, [commonOptions, isMobileViewport]);
+
+  const compareOptions = useMemo(() => {
+    return {
+      ...commonOptions,
+      maintainAspectRatio: !isMobileViewport,
+      plugins: {
+        ...commonOptions.plugins,
+        title: { display: true, text: "Comparativo por dispositivo" },
+      },
+      scales: {
+        ...commonOptions.scales,
+        x: {
+          ...commonOptions.scales.x,
+          ticks: {
+            ...commonOptions.scales.x.ticks,
+            autoSkip: true,
+            maxTicksLimit: isMobileViewport ? COMPARE_WINDOW_SIZE_MOBILE : 12,
+            maxRotation: 0,
+            minRotation: 0,
+          },
+        },
+      },
+    };
+  }, [commonOptions, isMobileViewport]);
 
   /** =========================
    *  REGLAS POR PLAN
@@ -758,27 +1052,38 @@ export default function DashboardPage() {
     selectedDeviceId !== null
       ? daily.length === 0
       : Object.values(dailyByDevice).every((arr) => (arr || []).length === 0);
+  const shouldShowNoDailyData =
+    period === "daily" &&
+    hasLoadedDaily &&
+    !loading &&
+    !err &&
+    noDailyData &&
+    (selectedDeviceId !== null || devices.length > 0);
 
   return (
     <div style={dashboardPageStyle}>
-      <main style={dashboardContentStyle}>
+      <main style={dashboardContentStyle} className="dashboard-main">
       <h1 style={{ fontSize: "34px", marginBottom: "6px", ...fadeUp(0) }}>Dashboard</h1>
       <p style={{ color: "#666", marginTop: 0, ...fadeUp(40) }}>
         Plan activo: {planLoading ? "Cargando..." : PLAN_LABELS[plan]}
       </p>
 
       {/* Filtros */}
-      <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", alignItems: "end", marginBottom: "18px", ...fadeUp(80) }}>
-        <div style={{ display: "flex", flexDirection: "column" }}>
+      <div
+        className="dashboard-filters"
+        style={{ display: "flex", gap: "14px", flexWrap: "wrap", alignItems: "end", marginBottom: "18px", ...fadeUp(80) }}
+      >
+        <div className="dashboard-filter-field" style={{ display: "flex", flexDirection: "column" }}>
           <label style={{ fontSize: "12px", color: "#666" }}>Mes</label>
-          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={inputStyle} />
+          <input className="dashboard-control-input" type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={inputStyle} />
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column" }}>
+        <div className="dashboard-filter-field" style={{ display: "flex", flexDirection: "column" }}>
           <label style={{ fontSize: "12px", color: "#666" }}>
             Dispositivo ({devices.length})
           </label>
           <select
+            className="dashboard-control-input"
             value={selectedDeviceId ?? 0}
             onChange={(e) => {
               const v = Number(e.target.value);
@@ -794,17 +1099,17 @@ export default function DashboardPage() {
           </select>
         </div>
 
-        <button type="button" onClick={refreshAll} disabled={loading} style={refreshBtn} className="dashboard-lift-btn">
+        <button type="button" onClick={refreshAll} disabled={loading} style={refreshBtn} className="dashboard-lift-btn dashboard-control-btn">
           {loading ? "Cargando..." : "Refrescar"}
         </button>
 
         {/* DESCARGABLES SOLO PREMIUM */}
         {canDownload && (
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <div className="dashboard-download-row" style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
             <button
               type="button"
               style={dlBtn}
-              className="dashboard-lift-btn"
+              className="dashboard-lift-btn dashboard-control-btn"
               disabled={downloadingCsv !== null}
               onClick={() => downloadCsv("monthly", csvUrl)}
             >
@@ -813,7 +1118,7 @@ export default function DashboardPage() {
             <button
               type="button"
               style={dlBtn}
-              className="dashboard-lift-btn"
+              className="dashboard-lift-btn dashboard-control-btn"
               disabled={downloadingCsv !== null}
               onClick={() => downloadCsv("daily", dailyCsvUrl)}
             >
@@ -822,7 +1127,7 @@ export default function DashboardPage() {
             <button
               type="button"
               style={dlBtn}
-              className="dashboard-lift-btn"
+              className="dashboard-lift-btn dashboard-control-btn"
               disabled={downloadingCsv !== null}
               onClick={() => downloadCsv("alerts", alertsCsvUrl)}
             >
@@ -844,7 +1149,7 @@ export default function DashboardPage() {
       )}
 
       {/* Cards */}
-      <div style={{ display: "grid", gap: "12px", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", marginTop: "18px" }}>
+      <div className="dashboard-summary-grid" style={{ display: "grid", gap: "12px", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", marginTop: "18px" }}>
         <Card title="Total del mes" value={summary?.month_total_kwh !== undefined ? `${summary.month_total_kwh.toFixed(2)} kWh` : "—"} delayMs={140} />
         <Card title="Mediciones del mes" value={summary?.month_measurements !== undefined ? String(summary.month_measurements) : "—"} delayMs={180} />
       </div>
@@ -859,7 +1164,7 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <div className="dashboard-period-tabs" style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
             {allowedPeriods.includes("daily") && (
               <button type="button" onClick={() => handlePeriodTabClick("daily")} style={tabBtn(period === "daily")} className="dashboard-lift-btn">
                 Diario
@@ -884,38 +1189,207 @@ export default function DashboardPage() {
         </div>
 
         <div style={{ marginTop: "18px" }}>
+          {period === "daily" && isMobileViewport && totalDailyPoints > DAILY_WINDOW_SIZE_MOBILE && (
+            <div className="dashboard-chart-window-controls">
+              <button
+                type="button"
+                className="dashboard-lift-btn"
+                style={tabBtn(false)}
+                aria-label="Página anterior de datos diarios"
+                onClick={() =>
+                  setDailyWindowStart((prev) =>
+                    Math.max(0, prev - DAILY_WINDOW_SIZE_MOBILE)
+                  )
+                }
+                disabled={clampedDailyWindowStart <= 0}
+              >
+                Anterior
+              </button>
+              <span
+                className="dashboard-chart-window-label"
+                role="status"
+                aria-live="polite"
+              >
+                {dailyWindowLabel}
+              </span>
+              <button
+                type="button"
+                className="dashboard-lift-btn"
+                style={tabBtn(false)}
+                aria-label="Página siguiente de datos diarios"
+                onClick={() =>
+                  setDailyWindowStart((prev) =>
+                    Math.min(maxDailyWindowStart, prev + DAILY_WINDOW_SIZE_MOBILE)
+                  )
+                }
+                disabled={clampedDailyWindowStart >= maxDailyWindowStart}
+              >
+                Siguiente
+              </button>
+            </div>
+          )}
+
+          {period === "weekly" && isMobileViewport && totalWeeklyPoints > WEEKLY_WINDOW_SIZE_MOBILE && (
+            <div className="dashboard-chart-window-controls">
+              <button
+                type="button"
+                className="dashboard-lift-btn"
+                style={tabBtn(false)}
+                aria-label="Página anterior de datos semanales"
+                onClick={() =>
+                  setWeeklyWindowStart((prev) =>
+                    Math.max(0, prev - WEEKLY_WINDOW_SIZE_MOBILE)
+                  )
+                }
+                disabled={clampedWeeklyWindowStart <= 0}
+              >
+                Anterior
+              </button>
+              <span
+                className="dashboard-chart-window-label"
+                role="status"
+                aria-live="polite"
+              >
+                {weeklyWindowLabel}
+              </span>
+              <button
+                type="button"
+                className="dashboard-lift-btn"
+                style={tabBtn(false)}
+                aria-label="Página siguiente de datos semanales"
+                onClick={() =>
+                  setWeeklyWindowStart((prev) =>
+                    Math.min(maxWeeklyWindowStart, prev + WEEKLY_WINDOW_SIZE_MOBILE)
+                  )
+                }
+                disabled={clampedWeeklyWindowStart >= maxWeeklyWindowStart}
+              >
+                Siguiente
+              </button>
+            </div>
+          )}
+
+          {period === "monthly" && isMobileViewport && totalMonthlyPoints > MONTHLY_WINDOW_SIZE_MOBILE && (
+            <div className="dashboard-chart-window-controls">
+              <button
+                type="button"
+                className="dashboard-lift-btn"
+                style={tabBtn(false)}
+                aria-label="Página anterior de datos mensuales"
+                onClick={() =>
+                  setMonthlyWindowStart((prev) =>
+                    Math.max(0, prev - MONTHLY_WINDOW_SIZE_MOBILE)
+                  )
+                }
+                disabled={clampedMonthlyWindowStart <= 0}
+              >
+                Anterior
+              </button>
+              <span
+                className="dashboard-chart-window-label"
+                role="status"
+                aria-live="polite"
+              >
+                {monthlyWindowLabel}
+              </span>
+              <button
+                type="button"
+                className="dashboard-lift-btn"
+                style={tabBtn(false)}
+                aria-label="Página siguiente de datos mensuales"
+                onClick={() =>
+                  setMonthlyWindowStart((prev) =>
+                    Math.min(maxMonthlyWindowStart, prev + MONTHLY_WINDOW_SIZE_MOBILE)
+                  )
+                }
+                disabled={clampedMonthlyWindowStart >= maxMonthlyWindowStart}
+              >
+                Siguiente
+              </button>
+            </div>
+          )}
+
+          {period === "compare" && isMobileViewport && totalComparePoints > COMPARE_WINDOW_SIZE_MOBILE && (
+            <div className="dashboard-chart-window-controls">
+              <button
+                type="button"
+                className="dashboard-lift-btn"
+                style={tabBtn(false)}
+                aria-label="Página anterior de datos comparativos"
+                onClick={() =>
+                  setCompareWindowStart((prev) =>
+                    Math.max(0, prev - COMPARE_WINDOW_SIZE_MOBILE)
+                  )
+                }
+                disabled={clampedCompareWindowStart <= 0}
+              >
+                Anterior
+              </button>
+              <span
+                className="dashboard-chart-window-label"
+                role="status"
+                aria-live="polite"
+              >
+                {compareWindowLabel}
+              </span>
+              <button
+                type="button"
+                className="dashboard-lift-btn"
+                style={tabBtn(false)}
+                aria-label="Página siguiente de datos comparativos"
+                onClick={() =>
+                  setCompareWindowStart((prev) =>
+                    Math.min(maxCompareWindowStart, prev + COMPARE_WINDOW_SIZE_MOBILE)
+                  )
+                }
+                disabled={clampedCompareWindowStart >= maxCompareWindowStart}
+              >
+                Siguiente
+              </button>
+            </div>
+          )}
+
           {period === "daily" && (
-            <Bar
-              key={`chart-daily-${chartAnimationSeed}`}
-              data={dailyLineData as unknown as ChartData<"bar", number[], string>}
-              options={dailyOptions as unknown as ChartOptions<"bar">}
-            />
+            <div style={isMobileViewport ? { height: "290px" } : undefined}>
+              <Bar
+                key={`chart-daily-${chartAnimationSeed}`}
+                data={dailyChartData as unknown as ChartData<"bar", number[], string>}
+                options={dailyOptions as unknown as ChartOptions<"bar">}
+              />
+            </div>
           )}
 
           {period === "weekly" && (
-            <Bar
-              key={`chart-weekly-${chartAnimationSeed}`}
-              data={weeklyBarData as unknown as ChartData<"bar", number[], string>}
-              options={weeklyOptions as unknown as ChartOptions<"bar">}
-            />
+            <div style={isMobileViewport ? { height: "290px" } : undefined}>
+              <Bar
+                key={`chart-weekly-${chartAnimationSeed}`}
+                data={weeklyChartData as unknown as ChartData<"bar", number[], string>}
+                options={weeklyOptions as unknown as ChartOptions<"bar">}
+              />
+            </div>
           )}
 
           {period === "monthly" && (
-            <Bar
-              key={`chart-monthly-${chartAnimationSeed}`}
-              data={monthlyBarData as unknown as ChartData<"bar", number[], string>}
-              options={monthlyOptions as unknown as ChartOptions<"bar">}
-            />
+            <div style={isMobileViewport ? { height: "290px" } : undefined}>
+              <Bar
+                key={`chart-monthly-${chartAnimationSeed}`}
+                data={monthlyChartData as unknown as ChartData<"bar", number[], string>}
+                options={monthlyOptions as unknown as ChartOptions<"bar">}
+              />
+            </div>
           )}
 
           {period === "compare" && (
-            <Bar
-              key={`chart-compare-${chartAnimationSeed}`}
-              {...makeCompareBar("Comparativo por dispositivo", compare)}
-            />
+            <div style={isMobileViewport ? { height: "290px" } : undefined}>
+              <Bar
+                key={`chart-compare-${chartAnimationSeed}`}
+                data={compareChartData as unknown as ChartData<"bar", number[], string>}
+                options={compareOptions as unknown as ChartOptions<"bar">}
+              />
+            </div>
           )}
 
-          {period === "daily" && noDailyData && (
+          {shouldShowNoDailyData && (
             <p style={{ marginTop: "10px", color: "#666" }}>No hay datos diarios para este mes.</p>
           )}
         </div>
@@ -989,6 +1463,84 @@ export default function DashboardPage() {
           background: rgba(239, 246, 255, 0.78);
           transform: translateY(-1px);
           box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+        }
+
+        .dashboard-chart-window-controls {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          margin-bottom: 10px;
+        }
+
+        .dashboard-chart-window-label {
+          font-size: 12px;
+          color: #475569;
+          font-weight: 600;
+          text-align: center;
+          min-width: 88px;
+        }
+
+        @media (max-width: 768px) {
+          .dashboard-main {
+            max-width: 100% !important;
+          }
+
+          .dashboard-filters {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            align-items: stretch !important;
+            gap: 10px !important;
+          }
+
+          .dashboard-filter-field {
+            width: 100% !important;
+          }
+
+          .dashboard-control-input {
+            width: 100% !important;
+            min-height: 42px;
+          }
+
+          .dashboard-control-btn {
+            width: 100% !important;
+            justify-content: center !important;
+          }
+
+          .dashboard-download-row {
+            width: 100% !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 8px !important;
+          }
+
+          .dashboard-summary-grid {
+            grid-template-columns: 1fr !important;
+          }
+
+          .dashboard-period-tabs {
+            width: 100% !important;
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 8px !important;
+          }
+
+          .dashboard-surface {
+            padding: 12px !important;
+          }
+
+          .dashboard-chart-window-controls {
+            gap: 6px;
+          }
+
+          .dashboard-chart-window-controls button {
+            flex: 1;
+            padding: 8px 10px !important;
+          }
+
+          .dashboard-chart-window-label {
+            flex: 1;
+          }
         }
 
         @media (prefers-reduced-motion: reduce) {
