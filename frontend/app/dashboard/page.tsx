@@ -1195,6 +1195,7 @@ export default function DashboardPage() {
                 type="button"
                 className="dashboard-lift-btn"
                 style={tabBtn(false)}
+                aria-label="Página anterior de datos diarios"
                 onClick={() =>
                   setDailyWindowStart((prev) =>
                     Math.max(0, prev - DAILY_WINDOW_SIZE_MOBILE)
@@ -1204,11 +1205,18 @@ export default function DashboardPage() {
               >
                 Anterior
               </button>
-              <span className="dashboard-chart-window-label">{dailyWindowLabel}</span>
+              <span
+                className="dashboard-chart-window-label"
+                role="status"
+                aria-live="polite"
+              >
+                {dailyWindowLabel}
+              </span>
               <button
                 type="button"
                 className="dashboard-lift-btn"
                 style={tabBtn(false)}
+                aria-label="Página siguiente de datos diarios"
                 onClick={() =>
                   setDailyWindowStart((prev) =>
                     Math.min(maxDailyWindowStart, prev + DAILY_WINDOW_SIZE_MOBILE)
@@ -1227,6 +1235,7 @@ export default function DashboardPage() {
                 type="button"
                 className="dashboard-lift-btn"
                 style={tabBtn(false)}
+                aria-label="Página anterior de datos semanales"
                 onClick={() =>
                   setWeeklyWindowStart((prev) =>
                     Math.max(0, prev - WEEKLY_WINDOW_SIZE_MOBILE)
@@ -1236,11 +1245,18 @@ export default function DashboardPage() {
               >
                 Anterior
               </button>
-              <span className="dashboard-chart-window-label">{weeklyWindowLabel}</span>
+              <span
+                className="dashboard-chart-window-label"
+                role="status"
+                aria-live="polite"
+              >
+                {weeklyWindowLabel}
+              </span>
               <button
                 type="button"
                 className="dashboard-lift-btn"
                 style={tabBtn(false)}
+                aria-label="Página siguiente de datos semanales"
                 onClick={() =>
                   setWeeklyWindowStart((prev) =>
                     Math.min(maxWeeklyWindowStart, prev + WEEKLY_WINDOW_SIZE_MOBILE)
@@ -1259,6 +1275,7 @@ export default function DashboardPage() {
                 type="button"
                 className="dashboard-lift-btn"
                 style={tabBtn(false)}
+                aria-label="Página anterior de datos mensuales"
                 onClick={() =>
                   setMonthlyWindowStart((prev) =>
                     Math.max(0, prev - MONTHLY_WINDOW_SIZE_MOBILE)
@@ -1268,11 +1285,18 @@ export default function DashboardPage() {
               >
                 Anterior
               </button>
-              <span className="dashboard-chart-window-label">{monthlyWindowLabel}</span>
+              <span
+                className="dashboard-chart-window-label"
+                role="status"
+                aria-live="polite"
+              >
+                {monthlyWindowLabel}
+              </span>
               <button
                 type="button"
                 className="dashboard-lift-btn"
                 style={tabBtn(false)}
+                aria-label="Página siguiente de datos mensuales"
                 onClick={() =>
                   setMonthlyWindowStart((prev) =>
                     Math.min(maxMonthlyWindowStart, prev + MONTHLY_WINDOW_SIZE_MOBILE)
@@ -1291,6 +1315,7 @@ export default function DashboardPage() {
                 type="button"
                 className="dashboard-lift-btn"
                 style={tabBtn(false)}
+                aria-label="Página anterior de datos comparativos"
                 onClick={() =>
                   setCompareWindowStart((prev) =>
                     Math.max(0, prev - COMPARE_WINDOW_SIZE_MOBILE)
@@ -1300,11 +1325,18 @@ export default function DashboardPage() {
               >
                 Anterior
               </button>
-              <span className="dashboard-chart-window-label">{compareWindowLabel}</span>
+              <span
+                className="dashboard-chart-window-label"
+                role="status"
+                aria-live="polite"
+              >
+                {compareWindowLabel}
+              </span>
               <button
                 type="button"
                 className="dashboard-lift-btn"
                 style={tabBtn(false)}
+                aria-label="Página siguiente de datos comparativos"
                 onClick={() =>
                   setCompareWindowStart((prev) =>
                     Math.min(maxCompareWindowStart, prev + COMPARE_WINDOW_SIZE_MOBILE)
