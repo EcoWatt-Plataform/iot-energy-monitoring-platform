@@ -1,20 +1,7 @@
 import os
 from dataclasses import dataclass
-from pathlib import Path
 from dotenv import load_dotenv
 
-def _read_env_file(path: Path) -> dict[str, str]:
-    values: dict[str, str] = {}
-    if not path.exists():
-        return values
-
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        values[key.strip()] = value.strip()
-    return values
 
 @dataclass(frozen=True)
 class Settings:
@@ -26,23 +13,27 @@ class Settings:
     @staticmethod
     def load() -> "Settings":
         load_dotenv()
-        repo_root = Path(__file__).resolve().parents[2]
-        frontend_env = _read_env_file(repo_root / "frontend" / ".env.local")
 
-        supabase_url = (
-            os.getenv("SUPABASE_URL")
-            or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-            or frontend_env.get("NEXT_PUBLIC_SUPABASE_URL", "")
-            or ""
-        )
+        supabase_url = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+        if not supabase_url:
+            raise RuntimeError(
+                "Supabase URL is not configured. Please set the SUPABASE_URL "
+                "environment variable (or NEXT_PUBLIC_SUPABASE_URL)."
+            )
+
         supabase_anon_key = (
             os.getenv("SUPABASE_ANON_KEY")
             or os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
             or os.getenv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY")
-            or frontend_env.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
-            or frontend_env.get("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY", "")
-            or ""
         )
+        if not supabase_anon_key:
+            raise RuntimeError(
+                "Supabase anonymous key is not configured. Please set the "
+                "SUPABASE_ANON_KEY environment variable (or "
+                "NEXT_PUBLIC_SUPABASE_ANON_KEY / "
+                "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY)."
+            )
+
         return Settings(
             db_path=os.getenv("DB_PATH", "./data/sisterna.sqlite"),
             app_secret=os.getenv("APP_SECRET", "dev-secret"),

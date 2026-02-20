@@ -27,6 +27,7 @@ ChartJS.register(
 );
 
 type Plan = "basico" | "avanzado" | "premium";
+type DownloadKind = "monthly" | "daily" | "alerts";
 
 type Device = { id: number; name: string };
 
@@ -43,6 +44,67 @@ type SummaryResponse = {
   devices?: SummaryDevice[];
   alerts?: { device_name: string; energy_wh: number; threshold_wh: number }[];
 };
+
+const PLAN_LABELS: Record<Plan, string> = {
+  basico: "Basico",
+  avanzado: "Avanzado",
+  premium: "Premium",
+};
+
+function normalizePlan(value: unknown): Plan {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (raw === "premium" || raw === "plan_premium" || raw === "pro") {
+    return "premium";
+  }
+  if (raw === "avanzado" || raw === "advanced" || raw === "plan_avanzado") {
+    return "avanzado";
+  }
+  return "basico";
+}
+
+function resolvePlanFromMetadata(metadata: unknown): Plan {
+  if (!metadata || typeof metadata !== "object") {
+    return "basico";
+  }
+
+  const meta = metadata as Record<string, unknown>;
+  return normalizePlan(
+    meta.plan ??
+      meta.subscription_plan ??
+      meta.subscription ??
+      meta.tier ??
+      meta.plan_name
+  );
+}
+
+function fallbackCsvFilename(kind: DownloadKind, month: string, deviceId: number | null) {
+  const prefix =
+    kind === "monthly" ? "measurements" : kind === "daily" ? "daily" : "alerts";
+
+  let filename = `${prefix}_${month}`;
+  if (deviceId !== null) filename += `_device${deviceId}`;
+  return `${filename}.csv`;
+}
+
+function filenameFromDisposition(disposition: string | null, fallback: string) {
+  if (!disposition) return fallback;
+
+  const utf8 = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8?.[1]) {
+    try {
+      return decodeURIComponent(utf8[1]);
+    } catch {
+      return fallback;
+    }
+  }
+
+  const ascii = disposition.match(/filename="?([^\";]+)"?/i);
+  if (ascii?.[1]) return ascii[1];
+  return fallback;
+}
 
 function toYYYYMM(d: Date) {
   const y = d.getFullYear();
@@ -130,8 +192,11 @@ function sumMonthly(points: DailyPoint[]) {
 export default function DashboardPage() {
   const supabase = useMemo(() => createClient(), []);
 
-  // SIMULACIÓN DE PLAN (para probar sin login)
   const [plan, setPlan] = useState<Plan>("basico");
+  const [planLoading, setPlanLoading] = useState(true);
+  const [downloadingCsv, setDownloadingCsv] = useState<DownloadKind | null>(null);
+  const [copyingToken, setCopyingToken] = useState(false);
+  const [tokenCopyMessage, setTokenCopyMessage] = useState<string | null>(null);
 
   const [devices, setDevices] = useState<Device[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null);
@@ -199,6 +264,39 @@ export default function DashboardPage() {
     return token;
   }
 
+  async function copyAccessToken() {
+    setTokenCopyMessage(null);
+    setCopyingToken(true);
+
+    try {
+      const token = await getAccessToken();
+
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(token);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = token;
+        textarea.setAttribute("readonly", "true");
+        textarea.style.position = "absolute";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        textarea.remove();
+      }
+
+      setTokenCopyMessage("Token copiado al portapapeles.");
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No se pudo copiar el token. Intenta nuevamente.";
+      setTokenCopyMessage(message);
+    } finally {
+      setCopyingToken(false);
+    }
+  }
+
   async function authFetch(url: string, init: RequestInit = {}) {
     const token = await getAccessToken();
     const headers = new Headers(init.headers ?? {});
@@ -208,6 +306,45 @@ export default function DashboardPage() {
       ...init,
       headers,
     });
+  }
+
+  async function downloadCsv(kind: DownloadKind, url: string) {
+    try {
+      setErr(null);
+      setDownloadingCsv(kind);
+
+      const res = await authFetch(url);
+      if (!res.ok) {
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          const payload = await res.json();
+          throw new Error(payload.error || `No se pudo descargar el CSV (${res.status}).`);
+        }
+        throw new Error(`No se pudo descargar el CSV (${res.status}).`);
+      }
+
+      const blob = await res.blob();
+      const fallback = fallbackCsvFilename(kind, month, selectedDeviceId);
+      const filename = filenameFromDisposition(
+        res.headers.get("Content-Disposition"),
+        fallback
+      );
+
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "No se pudo descargar el archivo.";
+      setErr(message);
+    } finally {
+      setDownloadingCsv(null);
+    }
   }
 
   async function loadDevices() {
@@ -296,6 +433,41 @@ export default function DashboardPage() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadPlan() {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!mounted) return;
+        setPlan(resolvePlanFromMetadata(user?.user_metadata));
+      } catch {
+        if (!mounted) return;
+        setPlan("basico");
+      } finally {
+        if (mounted) setPlanLoading(false);
+      }
+    }
+
+    loadPlan();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      setPlan(resolvePlanFromMetadata(session?.user?.user_metadata));
+      setPlanLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
 
   useEffect(() => {
     refreshAll();
@@ -528,11 +700,17 @@ export default function DashboardPage() {
     if (!allowedPeriods.includes(period)) setPeriod(allowedPeriods[0]);
   }, [allowedPeriods, period]);
 
-  // Alertas según plan (solo afecta al renderizado de la UI)
+  useEffect(() => {
+    if (!tokenCopyMessage) return;
+    const timeoutId = window.setTimeout(() => {
+      setTokenCopyMessage(null);
+    }, 6000);
+    return () => window.clearTimeout(timeoutId);
+  }, [tokenCopyMessage]);
+
+  // Alertas según plan
   const canSeeAlerts = plan !== "basico";
-  // Descargables: el control de acceso real debe hacerse SIEMPRE en el backend.
-  // No usamos el estado de `plan` del cliente como fuente de verdad para permisos.
-  const canDownload = false;
+  const canDownload = plan === "premium";
 
   const noDailyData =
     selectedDeviceId !== null
@@ -543,21 +721,19 @@ export default function DashboardPage() {
     <main style={{ padding: "28px", maxWidth: "1100px", margin: "0 auto" }}>
       <h1 style={{ fontSize: "34px", marginBottom: "6px" }}>Dashboard</h1>
       <p style={{ color: "#666", marginTop: 0 }}>
-        Probando con datos reales del backend. (Plan simulado)
+        Plan activo: {planLoading ? "Cargando..." : PLAN_LABELS[plan]}
       </p>
 
-      {/* Plan simulado */}
-      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", margin: "14px 0 22px" }}>
-        <span style={{ fontWeight: 700 }}>Plan:</span>
-        <button type="button" onClick={() => setPlan("basico")} style={planBtn(plan === "basico")}>
-          Básico
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
+        <button
+          type="button"
+          onClick={copyAccessToken}
+          disabled={copyingToken}
+          style={secondaryBtn}
+        >
+          {copyingToken ? "Copiando token..." : "Copiar access token"}
         </button>
-        <button type="button" onClick={() => setPlan("avanzado")} style={planBtn(plan === "avanzado")}>
-          Avanzado
-        </button>
-        <button type="button" onClick={() => setPlan("premium")} style={planBtn(plan === "premium")}>
-          Premium
-        </button>
+        {tokenCopyMessage && <span style={{ color: "#666", fontSize: "13px" }}>{tokenCopyMessage}</span>}
       </div>
 
       {/* Filtros */}
@@ -592,16 +768,36 @@ export default function DashboardPage() {
         {/* DESCARGABLES SOLO PREMIUM */}
         {canDownload && (
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-            <a style={dlBtn} href={csvUrl}>
-              Descargar CSV (completo)
-            </a>
-            <a style={dlBtn} href={dailyCsvUrl}>
-              CSV diario
-            </a>
-            <a style={dlBtn} href={alertsCsvUrl}>
-              CSV alertas
-            </a>
+            <button
+              type="button"
+              style={dlBtn}
+              disabled={downloadingCsv !== null}
+              onClick={() => downloadCsv("monthly", csvUrl)}
+            >
+              {downloadingCsv === "monthly" ? "Descargando..." : "CSV mensual"}
+            </button>
+            <button
+              type="button"
+              style={dlBtn}
+              disabled={downloadingCsv !== null}
+              onClick={() => downloadCsv("daily", dailyCsvUrl)}
+            >
+              {downloadingCsv === "daily" ? "Descargando..." : "CSV diario"}
+            </button>
+            <button
+              type="button"
+              style={dlBtn}
+              disabled={downloadingCsv !== null}
+              onClick={() => downloadCsv("alerts", alertsCsvUrl)}
+            >
+              {downloadingCsv === "alerts" ? "Descargando..." : "CSV alertas"}
+            </button>
           </div>
+        )}
+        {!planLoading && !canDownload && (
+          <span style={{ color: "#666", fontSize: "13px" }}>
+            Descargas CSV disponibles solo para plan Premium.
+          </span>
         )}
       </div>
 
@@ -719,15 +915,27 @@ const refreshBtn: React.CSSProperties = {
   color: "white",
 };
 
-// ✅ Botones descargables
+const secondaryBtn: React.CSSProperties = {
+  border: "1px solid #ddd",
+  borderRadius: "10px",
+  padding: "10px 14px",
+  cursor: "pointer",
+  background: "white",
+  color: "#111827",
+  fontWeight: 600,
+};
+
 const dlBtn: React.CSSProperties = {
-  display: "inline-block",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
   borderRadius: "10px",
   padding: "10px 12px",
   border: "1px solid #ddd",
-  textDecoration: "none",
   color: "black",
   background: "white",
+  cursor: "pointer",
+  fontWeight: 600,
 };
 
 function tabBtn(active: boolean): React.CSSProperties {
@@ -735,18 +943,6 @@ function tabBtn(active: boolean): React.CSSProperties {
     border: "1px solid #ddd",
     borderRadius: "999px",
     padding: "8px 12px",
-    cursor: "pointer",
-    background: active ? "black" : "white",
-    color: active ? "white" : "black",
-    fontWeight: 700,
-  };
-}
-
-function planBtn(active: boolean): React.CSSProperties {
-  return {
-    border: "1px solid #ddd",
-    borderRadius: "999px",
-    padding: "6px 12px",
     cursor: "pointer",
     background: active ? "black" : "white",
     color: active ? "white" : "black",
