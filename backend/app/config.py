@@ -33,16 +33,27 @@ class Settings:
             os.getenv("SUPABASE_URL")
             or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
             or frontend_env.get("NEXT_PUBLIC_SUPABASE_URL", "")
-            or ""
         )
+        if not supabase_url:
+            raise RuntimeError(
+                "Supabase URL is not configured. Please set the SUPABASE_URL "
+                "environment variable (or NEXT_PUBLIC_SUPABASE_URL)."
+            )
+
         supabase_anon_key = (
             os.getenv("SUPABASE_ANON_KEY")
             or os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
             or os.getenv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY")
             or frontend_env.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
             or frontend_env.get("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY", "")
-            or ""
         )
+        if not supabase_anon_key:
+            raise RuntimeError(
+                "Supabase anonymous key is not configured. Please set the "
+                "SUPABASE_ANON_KEY environment variable (or "
+                "NEXT_PUBLIC_SUPABASE_ANON_KEY / "
+                "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY)."
+            )
         return Settings(
             db_path=os.getenv("DB_PATH", "./data/sisterna.sqlite"),
             app_secret=os.getenv("APP_SECRET", "dev-secret"),

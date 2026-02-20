@@ -64,10 +64,10 @@ export default function CheckoutPage() {
     setErr(null);
     setOkMsg(null);
 
-    if (!cart.length) return "Tu carrito esta vacio.";
-    if (!fullName.trim()) return "Completa tu nombre.";
-    if (!email.trim()) return "Completa tu email.";
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return "El email no es valido.";
+    if (!cart.length) return "Tu carrito está vacío.";
+    if (!fullName.trim()) return "Completá tu nombre.";
+    if (!email.trim()) return "Completá tu email.";
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return "El email no es válido.";
 
     return null;
   }
@@ -159,11 +159,11 @@ export default function CheckoutPage() {
             <input value={email} onChange={(e) => setEmail(e.target.value)} style={input} />
           </Field>
 
-          <Field label="Para que y donde lo vas a usar?">
+          <Field label="¿Para qué y dónde lo vas a usar?">
             <textarea
               value={usageDetails}
               onChange={(e) => setUsageDetails(e.target.value)}
-              placeholder="Ej: Cocina y living del local, heladera, horno electrico, iluminacion..."
+              placeholder="Ej: Cocina y living del local, heladera, horno eléctrico, iluminación..."
               style={{
                 ...input,
                 minHeight: "100px",
@@ -181,7 +181,7 @@ export default function CheckoutPage() {
           <h2 style={{ marginTop: 0, marginBottom: "14px" }}>Resumen</h2>
 
           {!cart.length ? (
-            <p style={{ margin: 0, color: "#666" }}>Tu carrito esta vacio.</p>
+            <p style={{ margin: 0, color: "#666" }}>Tu carrito está vacío.</p>
           ) : (
             <>
               {cart.map((x) => (

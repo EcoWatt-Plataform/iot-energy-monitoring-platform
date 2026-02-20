@@ -849,7 +849,7 @@ export default function DashboardPage() {
         </div>
 
         <div style={{ marginTop: "18px" }}>
-          {period === "daily" && <Line data={dailyLineData as any} options={dailyOptions as any} />}
+          {period === "daily" && <Bar data={dailyLineData as any} options={dailyOptions as any} />}
 
           {period === "weekly" && <Bar data={weeklyBarData as any} options={weeklyOptions as any} />}
 
