@@ -12,7 +12,7 @@ import {
   Legend,
   Title,
 } from "chart.js";
-import { Bar } from "react-chartjs-2";
+import { Line, Bar } from "react-chartjs-2";
 import { createClient } from "@/lib/supabase/client";
 
 ChartJS.register(

@@ -134,7 +134,9 @@ def _plan_from_user(user: dict) -> str:
     for key in _PLAN_METADATA_KEYS:
         if key in meta:
             return _normalize_plan(meta[key])
-    return "basico"@web_bp.get("/")
+    return "basico"
+
+@web_bp.get("/")
 def home():
     return render_template("index.html")
 
