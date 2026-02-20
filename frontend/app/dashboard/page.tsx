@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Chart as ChartJS,
+  type ChartData,
+  type ChartOptions,
   CategoryScale,
   LinearScale,
   PointElement,
@@ -12,7 +14,7 @@ import {
   Legend,
   Title,
 } from "chart.js";
-import { Line, Bar } from "react-chartjs-2";
+import { Bar } from "react-chartjs-2";
 import { createClient } from "@/lib/supabase/client";
 
 ChartJS.register(
@@ -126,6 +128,11 @@ function toYYYYMM(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   return `${y}-${m}`;
+}
+
+function getErrorMessage(error: unknown, fallback = "Error") {
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
 }
 
 function startOfWeekLabel(isoDate: string) {
@@ -446,8 +453,8 @@ export default function DashboardPage() {
     try {
       await loadSummary(month, selectedDeviceId);
       await loadDaily(month, selectedDeviceId);
-    } catch (e: any) {
-      setErr(e.message || "Error");
+    } catch (e: unknown) {
+      setErr(getErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -457,8 +464,8 @@ export default function DashboardPage() {
     (async () => {
       try {
         await loadDevices();
-      } catch (e: any) {
-        setErr(e.message || "Error");
+      } catch (e: unknown) {
+        setErr(getErrorMessage(e));
       }
     })();
   }, []);
@@ -880,24 +887,24 @@ export default function DashboardPage() {
           {period === "daily" && (
             <Bar
               key={`chart-daily-${chartAnimationSeed}`}
-              data={dailyLineData as any}
-              options={dailyOptions as any}
+              data={dailyLineData as unknown as ChartData<"bar", number[], string>}
+              options={dailyOptions as unknown as ChartOptions<"bar">}
             />
           )}
 
           {period === "weekly" && (
             <Bar
               key={`chart-weekly-${chartAnimationSeed}`}
-              data={weeklyBarData as any}
-              options={weeklyOptions as any}
+              data={weeklyBarData as unknown as ChartData<"bar", number[], string>}
+              options={weeklyOptions as unknown as ChartOptions<"bar">}
             />
           )}
 
           {period === "monthly" && (
             <Bar
               key={`chart-monthly-${chartAnimationSeed}`}
-              data={monthlyBarData as any}
-              options={monthlyOptions as any}
+              data={monthlyBarData as unknown as ChartData<"bar", number[], string>}
+              options={monthlyOptions as unknown as ChartOptions<"bar">}
             />
           )}
 

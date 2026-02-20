@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Link from "next/link";
 import "./globals.css";
 import Header from "./components/header";
 
@@ -58,25 +59,25 @@ export default function RootLayout({
             }}
           >
             {/* Logo */}
-            <a href="/" style={{ display: "flex", alignItems: "center" }}>
+            <Link href="/" style={{ display: "flex", alignItems: "center" }}>
               <img
                 src="/logo4.PNG"
                 alt="EcoWatt"
                 style={{ height: "28px", width: "auto" }}
               />
-            </a>
+            </Link>
 
             {/* Links */}
             <div style={{ display: "flex", gap: "18px", flexWrap: "wrap" }}>
-              <a href="/producto" style={{ color: "white", textDecoration: "none" }}>
+              <Link href="/producto" style={{ color: "white", textDecoration: "none" }}>
                 Producto
-              </a>
-              <a href="/planes" style={{ color: "white", textDecoration: "none" }}>
+              </Link>
+              <Link href="/planes" style={{ color: "white", textDecoration: "none" }}>
                 Planes
-              </a>
-              <a href="/soporte" style={{ color: "white", textDecoration: "none" }}>
+              </Link>
+              <Link href="/soporte" style={{ color: "white", textDecoration: "none" }}>
                 Soporte
-              </a>
+              </Link>
             </div>
           </div>
 
