@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 type FaqItem = {
   id: number;
@@ -199,7 +200,7 @@ export default function SoportePage() {
 
       {/* BOTON VOLVER */}
       <div style={{ marginTop: "44px", textAlign: "center" }}>
-        <a
+        <Link
           href="/"
           style={{
             display: "inline-block",
@@ -211,7 +212,7 @@ export default function SoportePage() {
           }}
         >
           Volver al inicio
-        </a>
+        </Link>
       </div>
     </div>
   );

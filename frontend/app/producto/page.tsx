@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function ProductoPage() {
   return (
     <div>
@@ -26,7 +28,7 @@ export default function ProductoPage() {
             <div style={{ fontWeight: 700 }}>EcoWatt Socket</div>
           </div>
 
-          <a
+          <Link
             href="/planes"
             style={{
               padding: "10px 14px",
@@ -38,7 +40,7 @@ export default function ProductoPage() {
             }}
           >
             Ver planes
-          </a>
+          </Link>
         </div>
       </div>
 
@@ -165,7 +167,7 @@ export default function ProductoPage() {
 
         {/* BOTÓN VOLVER */}
         <div style={{ marginTop: "56px" }}>
-          <a
+          <Link
             href="/"
             style={{
               display: "inline-block",
@@ -177,7 +179,7 @@ export default function ProductoPage() {
             }}
           >
             Volver al inicio
-          </a>
+          </Link>
         </div>
       </div>
     </div>
