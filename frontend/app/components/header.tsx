@@ -112,6 +112,9 @@ export default function Header() {
     fontWeight: 500,
   };
 
+  // Icon filter adapts to header background (white bar vs transparent)
+  const iconFilter = shouldShowWhiteBar ? "invert(0)" : "invert(1)";
+
   const rightBtnStyle: React.CSSProperties = {
     color: textColor,
     textDecoration: "none",
@@ -129,6 +132,16 @@ export default function Header() {
     background: "transparent",
     cursor: "pointer",
     font: "inherit",
+  };
+
+  const iconBtnStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "38px",
+    height: "38px",
+    borderRadius: "999px",
+    transition: "0.2s",
   };
 
   const userBadgeStyle: React.CSSProperties = {
@@ -204,8 +217,12 @@ export default function Header() {
           gap: "10px",
         }}
       >
-        <Link href="/carrito" style={rightBtnStyle} aria-label="Ir al carrito" title="Carrito">
-          Carrito
+        <Link href="/carrito" aria-label="Ir al carrito" title="Carrito" style={{ display: "flex", alignItems: "center" }}>
+          <img
+            src="/ImgCarrito.png"
+            alt="Carrito"
+            style={{ width: "22px", height: "22px", filter: iconFilter, transition: "0.2s" }}
+          />
         </Link>
 
         {authLoading ? (
@@ -223,8 +240,12 @@ export default function Header() {
             </button>
           </>
         ) : (
-          <Link href="/login" style={rightBtnStyle}>
-            Iniciar sesion
+          <Link href="/login" aria-label="Iniciar sesión" style={iconBtnStyle}>
+            <img
+              src="/IniciarSesion.png"
+              alt="Iniciar sesión"
+              style={{ width: "20px", filter: iconFilter, transition: "0.2s" }}
+            />
           </Link>
         )}
       </div>
