@@ -398,6 +398,39 @@ def summary_month():
     with get_con(_db_path()) as con:
         rows = con.execute(base_sql, tuple(params)).fetchall()
 
+        # Para cada dispositivo con alerta, detectamos el primer timestamp
+        # en el que la energía acumulada del mes supera su umbral.
+        threshold_map: dict[int, float] = {}
+        for r in rows:
+            energy_wh = float(r["energy_wh"] or 0)
+            thr = float(r["monthly_threshold_wh"] or 0)
+            if thr > 0 and energy_wh > thr:
+                threshold_map[int(r["id"])] = thr
+
+        crossed_at_by_device: dict[int, str] = {}
+        if threshold_map:
+            placeholders = ",".join("?" for _ in threshold_map)
+            crossing_rows = con.execute(
+                f"""
+                SELECT m.device_id, m.ts, m.energy_wh
+                FROM measurements m
+                WHERE m.device_id IN ({placeholders})
+                  AND substr(m.ts, 1, 7) = ?
+                ORDER BY m.device_id ASC, m.ts ASC, m.id ASC
+                """,
+                tuple(list(threshold_map.keys()) + [month]),
+            ).fetchall()
+
+            running_wh: dict[int, float] = {}
+            for row in crossing_rows:
+                dev_id = int(row["device_id"])
+                if dev_id in crossed_at_by_device:
+                    continue
+
+                running_wh[dev_id] = running_wh.get(dev_id, 0.0) + float(row["energy_wh"] or 0.0)
+                if running_wh[dev_id] > threshold_map[dev_id]:
+                    crossed_at_by_device[dev_id] = str(row["ts"])
+
     devices = []
     alerts = []
     month_total_wh = 0.0
@@ -420,11 +453,16 @@ def summary_month():
 
         thr = float(item["monthly_threshold_wh"] or 0)
         if thr > 0 and item["energy_wh"] > thr:
+            exceed_wh = max(0.0, item["energy_wh"] - thr)
+            exceed_pct = (exceed_wh / thr * 100.0) if thr > 0 else 0.0
             alerts.append({
                 "device_id": item["id"],
                 "device_name": item["name"],
                 "energy_wh": item["energy_wh"],
                 "threshold_wh": thr,
+                "exceed_wh": exceed_wh,
+                "exceed_pct": round(exceed_pct, 2),
+                "crossed_at": crossed_at_by_device.get(int(item["id"])),
                 "type": "MONTHLY_THRESHOLD_EXCEEDED"
             })
 
