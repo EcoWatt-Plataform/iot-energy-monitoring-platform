@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 
 type PlanId = "basico" | "avanzado" | "premium";
 type ItemId = PlanId | "dispositivo";
@@ -45,6 +44,44 @@ function getQueryParams(): { plan: PlanId | null; item: "dispositivo" | null } {
   return { plan: validPlan, item: validItem };
 }
 
+function readStoredCart(): CartItem[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as CartItem[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function getInitialCart(): CartItem[] {
+  const cart = readStoredCart();
+
+  if (typeof window === "undefined") return cart;
+
+  const { plan, item } = getQueryParams();
+  if (!plan && !item) return cart;
+
+  let toAdd: { id: ItemId; nombre: string; precio: number } | null = null;
+  if (plan) toAdd = PLANES[plan];
+  if (item === "dispositivo") toAdd = DISPOSITIVO;
+  if (!toAdd) return cart;
+
+  const idx = cart.findIndex((x) => x.id === toAdd.id);
+  const next =
+    idx >= 0
+      ? cart.map((x) =>
+          x.id === toAdd.id ? { ...x, cantidad: Math.min(99, x.cantidad + 1) } : x
+        )
+      : [...cart, { ...toAdd, cantidad: 1 }];
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  return next;
+}
+
 function money(n: number) {
   return new Intl.NumberFormat("es-AR", {
     style: "currency",
@@ -53,7 +90,7 @@ function money(n: number) {
 }
 
 export default function CarritoPage() {
-  const [items, setItems] = useState<CartItem[]>([]);
+  const [items, setItems] = useState<CartItem[]>(() => getInitialCart());
 
   // Responsive detector
   const [isMobile, setIsMobile] = useState(false);
@@ -67,46 +104,10 @@ export default function CarritoPage() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // 1) cargar carrito guardado
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setItems(JSON.parse(raw));
-    } catch {
-      setItems([]);
-    }
-  }, []);
-
-  // 2) si viene ?plan=... o ?item=dispositivo -> sumar 1 (o agregar si no existe)
+  // Si viene ?plan=... o ?item=dispositivo, se limpia la query para no duplicar al refrescar.
   useEffect(() => {
     const { plan, item } = getQueryParams();
     if (!plan && !item) return;
-
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const cart: CartItem[] = raw ? JSON.parse(raw) : [];
-
-    let toAdd: { id: ItemId; nombre: string; precio: number } | null = null;
-
-    if (plan) toAdd = PLANES[plan];
-    if (item === "dispositivo") toAdd = DISPOSITIVO;
-
-    if (!toAdd) return;
-
-    const idx = cart.findIndex((x) => x.id === toAdd.id);
-    let nuevo: CartItem[];
-
-    if (idx >= 0) {
-      nuevo = cart.map((x) =>
-        x.id === toAdd!.id ? { ...x, cantidad: Math.min(99, x.cantidad + 1) } : x
-      );
-    } else {
-      nuevo = [...cart, { ...toAdd, cantidad: 1 }];
-    }
-
-    setItems(nuevo);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(nuevo));
-
-    // limpiar query para evitar duplicar al refrescar
     window.history.replaceState({}, "", "/carrito");
   }, []);
 
@@ -338,9 +339,9 @@ export default function CarritoPage() {
               <span>{money(totalParcial)}</span>
             </div>
 
-            <Link href="/checkout" style={primaryLinkBtn}>
+            <a href="/checkout" style={primaryLinkBtn}>
               Continuar
-            </Link>
+            </a>
           </div>
         </div>
       )}

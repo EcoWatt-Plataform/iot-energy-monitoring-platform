@@ -29,6 +29,23 @@
       </div>
     </header>
 
+    <section class="card" style="margin-bottom: 14px;">
+      <h2>Autenticacion</h2>
+      <div class="controls" style="flex-wrap: wrap; align-items: center;">
+        <input
+          id="authToken"
+          type="password"
+          placeholder="Pega aqui tu access token de Supabase (sin Bearer)"
+          style="flex: 1; min-width: 320px;"
+        />
+        <button id="saveTokenBtn" type="button">Guardar token</button>
+        <button id="clearTokenBtn" type="button">Limpiar token</button>
+      </div>
+      <div id="authStatus" class="muted" style="margin-top: 8px;">
+        Falta token. Configuralo para usar el dashboard.
+      </div>
+    </section>
+
     <!-- NUEVO: Resumen general -->
     <section class="grid">
       <div class="card">

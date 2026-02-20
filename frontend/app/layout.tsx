@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Link from "next/link";
 import "./globals.css";
 import Header from "./components/header";
-import Link from "next/link";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -77,7 +77,7 @@ export default function RootLayout({
               </Link>
               <Link href="/soporte" style={{ color: "white", textDecoration: "none" }}>
                 Soporte
-              </a>
+              </Link>
             </div>
           </div>
 
