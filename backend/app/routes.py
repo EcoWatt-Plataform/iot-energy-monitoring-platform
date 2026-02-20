@@ -1,5 +1,7 @@
 import json
 import secrets
+import time
+import threading
 from datetime import datetime
 from flask import Blueprint, current_app, jsonify, request, render_template
 from urllib import error as urlerror
@@ -23,6 +25,45 @@ def _extract_bearer_token() -> str:
     if not auth_header.lower().startswith("bearer "):
         return ""
     return auth_header[7:].strip()
+
+# ---------------------------------------------------------------------------
+# Simple in-process token cache with configurable TTL (default 60 s)
+# ---------------------------------------------------------------------------
+_TOKEN_CACHE_TTL = 60  # seconds
+_TOKEN_CACHE_MAX_SIZE = 1000
+_token_cache: dict[str, tuple[dict, float]] = {}
+_token_cache_lock = threading.Lock()
+
+
+def _cached_fetch_supabase_user(access_token: str) -> dict | None:
+    """Return cached user dict or fetch from Supabase and cache the result."""
+    now = time.monotonic()
+    with _token_cache_lock:
+        entry = _token_cache.get(access_token)
+        if entry is not None:
+            user, expires_at = entry
+            if now < expires_at:
+                return user
+            # Expired – remove stale entry
+            del _token_cache[access_token]
+
+    user = _fetch_supabase_user(access_token)
+
+    if user and user.get("id"):
+        with _token_cache_lock:
+            # Evict all expired entries if at capacity before inserting
+            if len(_token_cache) >= _TOKEN_CACHE_MAX_SIZE:
+                expired_keys = [k for k, (_, exp) in _token_cache.items() if now >= exp]
+                for k in expired_keys:
+                    del _token_cache[k]
+                # If still at capacity after eviction, remove oldest entries
+                if len(_token_cache) >= _TOKEN_CACHE_MAX_SIZE:
+                    overflow = len(_token_cache) - _TOKEN_CACHE_MAX_SIZE + 1
+                    for k in list(_token_cache.keys())[:overflow]:
+                        del _token_cache[k]
+            _token_cache[access_token] = (user, now + _TOKEN_CACHE_TTL)
+
+    return user
 
 def _fetch_supabase_user(access_token: str):
     if not access_token:
@@ -56,7 +97,7 @@ def _require_user():
         return None, (jsonify({"error": "Missing bearer token"}), 401)
 
     try:
-        user = _fetch_supabase_user(token)
+        user = _cached_fetch_supabase_user(token)
     except RuntimeError as e:
         return None, (jsonify({"error": str(e)}), 500)
     except Exception:
@@ -67,7 +108,33 @@ def _require_user():
 
     return user, None
 
-@web_bp.get("/")
+
+_PLAN_ALIASES: dict[str, str] = {
+    "premium": "premium",
+    "plan_premium": "premium",
+    "pro": "premium",
+    "avanzado": "avanzado",
+    "advanced": "avanzado",
+    "plan_avanzado": "avanzado",
+}
+_PLAN_METADATA_KEYS = ("plan", "subscription_plan", "subscription", "tier", "plan_name")
+
+
+def _normalize_plan(value: object) -> str:
+    """Return canonical plan name from a raw metadata value."""
+    raw = str(value or "").strip().lower()
+    return _PLAN_ALIASES.get(raw, "basico")
+
+
+def _plan_from_user(user: dict) -> str:
+    """Extract the subscription plan from a Supabase user object."""
+    meta = user.get("user_metadata") or {}
+    if not isinstance(meta, dict):
+        meta = {}
+    for key in _PLAN_METADATA_KEYS:
+        if key in meta:
+            return _normalize_plan(meta[key])
+    return "basico"@web_bp.get("/")
 def home():
     return render_template("index.html")
 
@@ -459,6 +526,9 @@ def export_measurements_csv():
     if auth_error:
         return auth_error
 
+    if _plan_from_user(user) != "premium":
+        return jsonify({"error": "CSV export requires a Premium plan"}), 403
+
     month = (request.args.get("month") or "").strip()
     device_id = request.args.get("device_id", type=int)
 
@@ -555,6 +625,9 @@ def export_daily_csv():
     if auth_error:
         return auth_error
 
+    if _plan_from_user(user) != "premium":
+        return jsonify({"error": "CSV export requires a Premium plan"}), 403
+
     month = (request.args.get("month") or "").strip()
     device_id = request.args.get("device_id", type=int)
 
@@ -639,6 +712,9 @@ def export_alerts_csv():
     user, auth_error = _require_user()
     if auth_error:
         return auth_error
+
+    if _plan_from_user(user) != "premium":
+        return jsonify({"error": "CSV export requires a Premium plan"}), 403
 
     month = (request.args.get("month") or "").strip()
     device_id = request.args.get("device_id", type=int)

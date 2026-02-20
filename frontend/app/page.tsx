@@ -191,7 +191,7 @@ export default function HomePage() {
               border: "1px solid rgba(255,255,255,0.2)",
             }}
           >
-            <button type="button" onClick={prev} style={arrowBtn()} aria-label="Slide anterior">
+            <button type="button" onClick={prev} style={arrowBtn(isMobile)} aria-label="Slide anterior">
               &lt;
             </button>
 
@@ -217,7 +217,7 @@ export default function HomePage() {
               ))}
             </div>
 
-            <button type="button" onClick={next} style={arrowBtn()} aria-label="Slide siguiente">
+            <button type="button" onClick={next} style={arrowBtn(isMobile)} aria-label="Slide siguiente">
               &gt;
             </button>
           </div>
@@ -398,9 +398,7 @@ function ArrowBetween() {
   );
 }
 
-function arrowBtn(): React.CSSProperties {
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-
+function arrowBtn(isMobile: boolean): React.CSSProperties {
   return {
     width: isMobile ? "34px" : "38px",
     height: isMobile ? "34px" : "38px",
