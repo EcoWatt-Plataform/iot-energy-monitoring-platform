@@ -33,7 +33,23 @@ type Device = { id: number; name: string };
 
 type DailyPoint = { date: string; kwh: number };
 
-type SummaryDevice = { id: number; name: string; energy_kwh: number };
+type SummaryDevice = {
+  id: number;
+  name: string;
+  energy_kwh: number;
+  energy_wh?: number;
+  monthly_threshold_wh?: number;
+};
+type AlertItem = {
+  device_id?: number;
+  device_name: string;
+  energy_wh: number;
+  threshold_wh: number;
+  exceed_wh?: number;
+  exceed_pct?: number;
+  crossed_at?: string | null;
+  type?: string;
+};
 
 type SummaryResponse = {
   month: string;
@@ -42,7 +58,7 @@ type SummaryResponse = {
   month_measurements?: number;
   top_consumer?: SummaryDevice | null;
   devices?: SummaryDevice[];
-  alerts?: { device_name: string; energy_wh: number; threshold_wh: number }[];
+  alerts?: AlertItem[];
 };
 
 const PLAN_LABELS: Record<Plan, string> = {
@@ -189,6 +205,12 @@ function sumMonthly(points: DailyPoint[]) {
   return points.reduce((acc, p) => acc + (Number(p.kwh) || 0), 0);
 }
 
+function fadeUp(delayMs = 0): React.CSSProperties {
+  return {
+    animation: `ecoDashboardFadeUp 460ms cubic-bezier(0.22, 1, 0.36, 1) ${delayMs}ms both`,
+  };
+}
+
 export default function DashboardPage() {
   const supabase = useMemo(() => createClient(), []);
 
@@ -214,10 +236,17 @@ export default function DashboardPage() {
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [chartAnimationSeed, setChartAnimationSeed] = useState(0);
 
   // Selector de período (según plan)
   type Period = "daily" | "weekly" | "monthly" | "compare";
   const [period, setPeriod] = useState<Period>("daily");
+
+  function handlePeriodTabClick(nextPeriod: Period) {
+    setPeriod(nextPeriod);
+    // Fuerza remount del grafico para reactivar animacion en cada click.
+    setChartAnimationSeed((prev) => prev + 1);
+  }
 
   const deviceOptions = useMemo(() => {
     return [{ id: 0, name: "Todos (comparar)" }, ...devices];
@@ -622,6 +651,10 @@ export default function DashboardPage() {
   const commonOptions = useMemo(() => {
     return {
       responsive: true,
+      animation: {
+        duration: 750,
+        easing: "easeOutQuart" as const,
+      },
       plugins: {
         legend: { display: true },
       },
@@ -711,6 +744,8 @@ export default function DashboardPage() {
   // Alertas según plan
   const canSeeAlerts = plan !== "basico";
   const canDownload = plan === "premium";
+  const alerts = summary?.alerts || [];
+  const summaryDevices = summary?.devices || [];
 
   const noDailyData =
     selectedDeviceId !== null
@@ -718,33 +753,24 @@ export default function DashboardPage() {
       : Object.values(dailyByDevice).every((arr) => (arr || []).length === 0);
 
   return (
-    <main style={{ padding: "28px", maxWidth: "1100px", margin: "0 auto" }}>
-      <h1 style={{ fontSize: "34px", marginBottom: "6px" }}>Dashboard</h1>
-      <p style={{ color: "#666", marginTop: 0 }}>
+    <div style={dashboardPageStyle}>
+      <main style={dashboardContentStyle}>
+      <h1 style={{ fontSize: "34px", marginBottom: "6px", ...fadeUp(0) }}>Dashboard</h1>
+      <p style={{ color: "#666", marginTop: 0, ...fadeUp(40) }}>
         Plan activo: {planLoading ? "Cargando..." : PLAN_LABELS[plan]}
       </p>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
-        <button
-          type="button"
-          onClick={copyAccessToken}
-          disabled={copyingToken}
-          style={secondaryBtn}
-        >
-          {copyingToken ? "Copiando token..." : "Copiar access token"}
-        </button>
-        {tokenCopyMessage && <span style={{ color: "#666", fontSize: "13px" }}>{tokenCopyMessage}</span>}
-      </div>
-
       {/* Filtros */}
-      <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", alignItems: "end", marginBottom: "18px" }}>
+      <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", alignItems: "end", marginBottom: "18px", ...fadeUp(80) }}>
         <div style={{ display: "flex", flexDirection: "column" }}>
           <label style={{ fontSize: "12px", color: "#666" }}>Mes</label>
           <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={inputStyle} />
         </div>
 
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <label style={{ fontSize: "12px", color: "#666" }}>Dispositivo</label>
+          <label style={{ fontSize: "12px", color: "#666" }}>
+            Dispositivo ({devices.length})
+          </label>
           <select
             value={selectedDeviceId ?? 0}
             onChange={(e) => {
@@ -761,7 +787,7 @@ export default function DashboardPage() {
           </select>
         </div>
 
-        <button type="button" onClick={refreshAll} disabled={loading} style={refreshBtn}>
+        <button type="button" onClick={refreshAll} disabled={loading} style={refreshBtn} className="dashboard-lift-btn">
           {loading ? "Cargando..." : "Refrescar"}
         </button>
 
@@ -771,6 +797,7 @@ export default function DashboardPage() {
             <button
               type="button"
               style={dlBtn}
+              className="dashboard-lift-btn"
               disabled={downloadingCsv !== null}
               onClick={() => downloadCsv("monthly", csvUrl)}
             >
@@ -779,6 +806,7 @@ export default function DashboardPage() {
             <button
               type="button"
               style={dlBtn}
+              className="dashboard-lift-btn"
               disabled={downloadingCsv !== null}
               onClick={() => downloadCsv("daily", dailyCsvUrl)}
             >
@@ -787,6 +815,7 @@ export default function DashboardPage() {
             <button
               type="button"
               style={dlBtn}
+              className="dashboard-lift-btn"
               disabled={downloadingCsv !== null}
               onClick={() => downloadCsv("alerts", alertsCsvUrl)}
             >
@@ -802,20 +831,19 @@ export default function DashboardPage() {
       </div>
 
       {err && (
-        <div style={{ border: "1px solid #ffb3b3", background: "#ffecec", padding: "12px", borderRadius: "12px" }}>
+        <div style={{ border: "1px solid #ffb3b3", background: "#ffecec", padding: "12px", borderRadius: "12px", ...fadeUp(120) }}>
           {err}
         </div>
       )}
 
       {/* Cards */}
-      <div style={{ display: "grid", gap: "12px", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", marginTop: "18px" }}>
-        <Card title="Total del mes" value={summary?.month_total_kwh !== undefined ? `${summary.month_total_kwh.toFixed(2)} kWh` : "—"} />
-        <Card title="Mediciones del mes" value={summary?.month_measurements !== undefined ? String(summary.month_measurements) : "—"} />
-        <Card title="Dispositivos" value={devices.length ? String(devices.length) : "—"} />
+      <div style={{ display: "grid", gap: "12px", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", marginTop: "18px" }}>
+        <Card title="Total del mes" value={summary?.month_total_kwh !== undefined ? `${summary.month_total_kwh.toFixed(2)} kWh` : "—"} delayMs={140} />
+        <Card title="Mediciones del mes" value={summary?.month_measurements !== undefined ? String(summary.month_measurements) : "—"} delayMs={180} />
       </div>
 
       {/* Gráficos */}
-      <section style={sectionBox}>
+      <section style={{ ...sectionBox, ...fadeUp(220) }} className="dashboard-surface">
         <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
           <div>
             <h2 style={{ margin: 0 }}>Gráficos</h2>
@@ -826,22 +854,22 @@ export default function DashboardPage() {
 
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
             {allowedPeriods.includes("daily") && (
-              <button type="button" onClick={() => setPeriod("daily")} style={tabBtn(period === "daily")}>
+              <button type="button" onClick={() => handlePeriodTabClick("daily")} style={tabBtn(period === "daily")} className="dashboard-lift-btn">
                 Diario
               </button>
             )}
             {allowedPeriods.includes("weekly") && (
-              <button type="button" onClick={() => setPeriod("weekly")} style={tabBtn(period === "weekly")}>
+              <button type="button" onClick={() => handlePeriodTabClick("weekly")} style={tabBtn(period === "weekly")} className="dashboard-lift-btn">
                 Semanal
               </button>
             )}
             {allowedPeriods.includes("monthly") && (
-              <button type="button" onClick={() => setPeriod("monthly")} style={tabBtn(period === "monthly")}>
+              <button type="button" onClick={() => handlePeriodTabClick("monthly")} style={tabBtn(period === "monthly")} className="dashboard-lift-btn">
                 Mensual
               </button>
             )}
             {allowedPeriods.includes("compare") && (
-              <button type="button" onClick={() => setPeriod("compare")} style={tabBtn(period === "compare")}>
+              <button type="button" onClick={() => handlePeriodTabClick("compare")} style={tabBtn(period === "compare")} className="dashboard-lift-btn">
                 Comparativo
               </button>
             )}
@@ -849,13 +877,36 @@ export default function DashboardPage() {
         </div>
 
         <div style={{ marginTop: "18px" }}>
-          {period === "daily" && <Bar data={dailyLineData as any} options={dailyOptions as any} />}
+          {period === "daily" && (
+            <Bar
+              key={`chart-daily-${chartAnimationSeed}`}
+              data={dailyLineData as any}
+              options={dailyOptions as any}
+            />
+          )}
 
-          {period === "weekly" && <Bar data={weeklyBarData as any} options={weeklyOptions as any} />}
+          {period === "weekly" && (
+            <Bar
+              key={`chart-weekly-${chartAnimationSeed}`}
+              data={weeklyBarData as any}
+              options={weeklyOptions as any}
+            />
+          )}
 
-          {period === "monthly" && <Bar data={monthlyBarData as any} options={monthlyOptions as any} />}
+          {period === "monthly" && (
+            <Bar
+              key={`chart-monthly-${chartAnimationSeed}`}
+              data={monthlyBarData as any}
+              options={monthlyOptions as any}
+            />
+          )}
 
-          {period === "compare" && <Bar {...makeCompareBar("Comparativo por dispositivo", compare)} />}
+          {period === "compare" && (
+            <Bar
+              key={`chart-compare-${chartAnimationSeed}`}
+              {...makeCompareBar("Comparativo por dispositivo", compare)}
+            />
+          )}
 
           {period === "daily" && noDailyData && (
             <p style={{ marginTop: "10px", color: "#666" }}>No hay datos diarios para este mes.</p>
@@ -863,41 +914,364 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* Alertas SOLO si NO es Básico */}
-      {canSeeAlerts && (
-        <section style={sectionBox}>
-          <h2 style={{ marginTop: 0 }}>Alertas</h2>
-          <ul style={{ margin: 0, paddingLeft: "18px", color: "#333" }}>
-            {(summary?.alerts || []).map((a, idx) => (
-              <li key={idx}>
-                {a.device_name}: {Math.round(a.energy_wh)} Wh &gt; {Math.round(a.threshold_wh)} Wh
-              </li>
-            ))}
-            {(!summary?.alerts || summary.alerts.length === 0) && <li>Sin alertas</li>}
-          </ul>
-        </section>
-      )}
-    </main>
+      <section style={{ ...sectionBox, ...fadeUp(260) }} className="dashboard-surface">
+        <AlertsSummaryCard canSeeAlerts={canSeeAlerts} alerts={alerts} devices={summaryDevices} />
+      </section>
+
+      <section style={{ ...sectionBox, ...fadeUp(300) }} className="dashboard-surface">
+        <h2 style={{ marginTop: 0 }}>Admin</h2>
+        <p style={{ margin: 0, color: "#666", fontSize: "13px" }}>
+          Usa esta opcion solo cuando necesites pegar el token en el dashboard backend.
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginTop: "10px" }}>
+          <button
+            type="button"
+            onClick={copyAccessToken}
+            disabled={copyingToken}
+            style={secondaryBtn}
+            className="dashboard-lift-btn"
+          >
+            {copyingToken ? "Copiando token..." : "Copiar access token"}
+          </button>
+          {tokenCopyMessage && <span style={{ color: "#666", fontSize: "13px" }}>{tokenCopyMessage}</span>}
+        </div>
+      </section>
+
+      <style jsx global>{`
+        @keyframes ecoDashboardFadeUp {
+          from {
+            opacity: 0;
+            transform: translateY(10px) scale(0.995);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        .dashboard-surface {
+          transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+        }
+
+        .dashboard-surface:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 16px 30px rgba(15, 23, 42, 0.09);
+        }
+
+        .dashboard-lift-btn {
+          transition: transform 170ms ease, box-shadow 170ms ease, filter 170ms ease;
+        }
+
+        .dashboard-lift-btn:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 10px 22px rgba(15, 23, 42, 0.14);
+          filter: saturate(1.04);
+        }
+
+        .dashboard-lift-btn:active:not(:disabled) {
+          transform: translateY(0);
+          box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+        }
+
+        .dashboard-alert-row {
+          transition: border-color 220ms ease, background-color 220ms ease, transform 220ms ease, box-shadow 220ms ease;
+        }
+
+        .dashboard-alert-row:hover {
+          border-color: rgba(59, 130, 246, 0.28);
+          background: rgba(239, 246, 255, 0.78);
+          transform: translateY(-1px);
+          box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .dashboard-surface,
+          .dashboard-lift-btn,
+          .dashboard-alert-row {
+            animation: none !important;
+            transition: none !important;
+            transform: none !important;
+          }
+        }
+      `}</style>
+
+      </main>
+    </div>
   );
 }
 
 /* ================= UI Helpers ================= */
 
-function Card(props: { title: string; value: string }) {
+function Card(props: { title: string; value: string; delayMs?: number }) {
   return (
-    <div style={{ border: "1px solid #eee", borderRadius: "14px", padding: "14px", background: "white" }}>
+    <div style={{ ...summaryCardStyle, ...fadeUp(props.delayMs ?? 0) }} className="dashboard-surface">
       <div style={{ fontSize: "12px", color: "#666" }}>{props.title}</div>
       <div style={{ marginTop: "8px", fontSize: "22px", fontWeight: 800 }}>{props.value}</div>
     </div>
   );
 }
 
+function formatCrossedAtLabel(value: string | null | undefined) {
+  if (!value) return "Momento de cruce no disponible";
+
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return "Momento de cruce no disponible";
+
+  return `Supero umbral: ${dt.toLocaleString("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+}
+
+function AlertsSummaryCard(props: {
+  canSeeAlerts: boolean;
+  alerts: AlertItem[];
+  devices: SummaryDevice[];
+}) {
+  const { canSeeAlerts, alerts, devices } = props;
+  const [openDeviceId, setOpenDeviceId] = useState<number | null>(null);
+  const alertsByDevice = new Map<number, AlertItem>();
+  for (const alert of alerts) {
+    if (alert.device_id !== undefined && alert.device_id !== null) {
+      alertsByDevice.set(alert.device_id, alert);
+    }
+  }
+
+  const deviceProgress = [...devices]
+    .map((d) => {
+      const energyWh = Math.max(
+        0,
+        Number(
+          d.energy_wh !== undefined
+            ? d.energy_wh
+            : Number(d.energy_kwh || 0) * 1000
+        )
+      );
+      const thresholdWh = Math.max(0, Number(d.monthly_threshold_wh || 0));
+      const rawPct = thresholdWh > 0 ? (energyWh / thresholdWh) * 100 : 0;
+      const progressPct = Math.max(0, rawPct);
+      const clampedPct = Math.min(100, progressPct);
+      const exceeded = thresholdWh > 0 && energyWh > thresholdWh;
+      const remainingWh = Math.max(0, thresholdWh - energyWh);
+      const alert = alertsByDevice.get(d.id);
+
+      return {
+        id: d.id,
+        name: d.name,
+        energyWh,
+        thresholdWh,
+        progressPct,
+        clampedPct,
+        exceeded,
+        remainingWh,
+        crossedAt: alert?.crossed_at ?? null,
+      };
+    })
+    .sort((a, b) => b.progressPct - a.progressPct);
+
+  return (
+    <div style={summaryCardStyle}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", alignItems: "center" }}>
+        <div style={{ fontSize: "12px", color: "#666" }}>Alertas</div>
+        {canSeeAlerts && (
+          <span
+            style={{
+              fontSize: "11px",
+              borderRadius: "999px",
+              padding: "3px 8px",
+              fontWeight: 700,
+              background: alerts.length ? "rgba(239,68,68,0.12)" : "rgba(34,197,94,0.12)",
+              color: alerts.length ? "#991b1b" : "#166534",
+            }}
+          >
+            {alerts.length ? `${alerts.length} activas` : "Sin activas"}
+          </span>
+        )}
+      </div>
+
+      {!canSeeAlerts ? (
+        <div style={{ marginTop: "8px", fontSize: "13px", color: "#666", lineHeight: 1.4 }}>
+          Disponible en planes Avanzado y Premium.
+        </div>
+      ) : deviceProgress.length === 0 ? (
+        <div style={{ marginTop: "8px", fontSize: "13px", color: "#666" }}>
+          No hay dispositivos para este período.
+        </div>
+      ) : (
+        <div style={{ marginTop: "8px", display: "grid", gap: "8px" }}>
+          {deviceProgress.map((d) => {
+            const isOpen = openDeviceId === d.id;
+            return (
+              <div
+                key={`alert-device-${d.id}`}
+                className="dashboard-alert-row"
+                style={{
+                  border: "1px solid rgba(15,23,42,0.08)",
+                  borderRadius: "10px",
+                  padding: "8px 10px",
+                  background: "rgba(248,250,252,0.85)",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenDeviceId((prev) => (prev === d.id ? null : d.id));
+                  }}
+                  aria-expanded={isOpen}
+                  aria-controls={`alert-device-panel-${d.id}`}
+                  style={{
+                    cursor: "pointer",
+                    display: "grid",
+                    gap: "4px",
+                    width: "100%",
+                    border: "none",
+                    background: "transparent",
+                    padding: 0,
+                    textAlign: "left",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", alignItems: "center" }}>
+                    <strong style={{ fontSize: "13px", color: "#111827" }}>{d.name}</strong>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          borderRadius: "999px",
+                          padding: "2px 7px",
+                          fontWeight: 700,
+                          background: d.exceeded
+                            ? "rgba(239,68,68,0.14)"
+                            : "rgba(59,130,246,0.14)",
+                          color: d.exceeded ? "#991b1b" : "#1d4ed8",
+                        }}
+                      >
+                        {Math.round(d.progressPct)}%
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          fontSize: "12px",
+                          color: "#64748b",
+                          transition: "transform 220ms ease",
+                          transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+                        }}
+                      >
+                        v
+                      </span>
+                    </div>
+                  </div>
+                  {d.exceeded ? (
+                    <span style={{ fontSize: "12px", color: "#b91c1c" }}>
+                      {formatCrossedAtLabel(d.crossedAt)}
+                    </span>
+                  ) : d.thresholdWh > 0 ? (
+                    <span style={{ fontSize: "12px", color: "#64748b" }}>
+                      Faltan {Math.round(d.remainingWh)} Wh para superar el umbral
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: "12px", color: "#64748b" }}>
+                      Sin umbral configurado
+                    </span>
+                  )}
+                </button>
+
+                <div
+                  id={`alert-device-panel-${d.id}`}
+                  style={{
+                    marginTop: isOpen ? "8px" : "0",
+                    display: "grid",
+                    gap: "6px",
+                    maxHeight: isOpen ? "160px" : "0",
+                    opacity: isOpen ? 1 : 0,
+                    overflow: "hidden",
+                    transition: "max-height 260ms ease, opacity 220ms ease, margin-top 220ms ease",
+                  }}
+                >
+                    <div
+                      style={{
+                        height: "8px",
+                        borderRadius: "999px",
+                        background: "rgba(15,23,42,0.1)",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${d.clampedPct}%`,
+                          height: "100%",
+                          background:
+                            d.exceeded
+                              ? "linear-gradient(90deg, rgba(245,158,11,0.9), rgba(239,68,68,0.9))"
+                              : "linear-gradient(90deg, rgba(59,130,246,0.9), rgba(16,185,129,0.9))",
+                        }}
+                      />
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: "8px",
+                        fontSize: "12px",
+                        color: "#475569",
+                      }}
+                    >
+                      <span>Consumo: {Math.round(d.energyWh)} Wh</span>
+                      <span>Umbral: {Math.round(d.thresholdWh)} Wh</span>
+                    </div>
+                    {d.exceeded ? (
+                      <div style={{ fontSize: "12px", color: "#991b1b", fontWeight: 700 }}>
+                        Exceso: {Math.round(Math.max(0, d.energyWh - d.thresholdWh))} Wh
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: "12px", color: "#2563eb", fontWeight: 700 }}>
+                        Progreso: {Math.round(d.progressPct)}% del umbral
+                      </div>
+                    )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const sectionBox: React.CSSProperties = {
-  border: "1px solid #eee",
+  border: "1px solid rgba(15,23,42,0.08)",
   borderRadius: "16px",
   padding: "16px",
-  background: "white",
+  background: "rgba(255,255,255,0.88)",
+  boxShadow: "0 12px 28px rgba(15,23,42,0.06)",
+  backdropFilter: "blur(4px)",
+  WebkitBackdropFilter: "blur(4px)",
   marginTop: "18px",
+};
+
+const summaryCardStyle: React.CSSProperties = {
+  border: "1px solid rgba(15,23,42,0.08)",
+  borderRadius: "14px",
+  padding: "14px",
+  background: "rgba(255,255,255,0.9)",
+  boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
+  backdropFilter: "blur(4px)",
+  WebkitBackdropFilter: "blur(4px)",
+};
+
+const dashboardPageStyle: React.CSSProperties = {
+  minHeight: "calc(100vh - 84px)",
+  padding: "24px 16px 40px",
+  background:
+    "radial-gradient(circle at 10% 12%, rgba(105,146,235,0.16), transparent 34%), radial-gradient(circle at 88% 88%, rgba(34,197,94,0.14), transparent 38%), linear-gradient(180deg, #f7f9fd 0%, #eef3fb 100%)",
+};
+
+const dashboardContentStyle: React.CSSProperties = {
+  maxWidth: "1100px",
+  margin: "0 auto",
 };
 
 const inputStyle: React.CSSProperties = {
