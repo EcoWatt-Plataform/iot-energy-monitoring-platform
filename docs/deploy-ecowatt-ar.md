@@ -104,6 +104,15 @@ Copiar configuración:
 ```bash
 sudo cp /opt/ecowatt/app/deploy/ecowatt.ar/nginx-ecowatt.conf /etc/nginx/sites-available/ecowatt.ar
 sudo ln -sf /etc/nginx/sites-available/ecowatt.ar /etc/nginx/sites-enabled/ecowatt.ar
+```
+
+Agregar en el bloque `http {}` de `/etc/nginx/nginx.conf` (antes del primer `server`):
+
+```nginx
+limit_req_zone $binary_remote_addr zone=api_limit:10m rate=30r/s;
+```
+
+```bash
 sudo nginx -t
 sudo systemctl reload nginx
 ```
