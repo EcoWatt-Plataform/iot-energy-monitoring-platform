@@ -760,16 +760,28 @@ def create_device():
     if auth_error:
         return auth_error
 
+    owner_user_id, owner_error = _resolve_owner_user_id(user)
+    if owner_error:
+        return owner_error
+
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "").strip()
-    threshold = float(data.get("monthly_threshold_wh") or 0)
+    try:
+        threshold = float(data.get("monthly_threshold_wh") or 0)
+    except (TypeError, ValueError):
+        return jsonify({"error": "monthly_threshold_wh must be a number"}), 400
 
     if not name:
         return jsonify({"error": "name is required"}), 400
+    if len(name) > 80:
+        return jsonify({"error": "name too long (max 80)"}), 400
+    if threshold < 0:
+        return jsonify({"error": "monthly_threshold_wh must be >= 0"}), 400
 
     api_key = secrets.token_hex(16)
-    owner_user_id = user["id"]
     owner_email = (user.get("email") or "").strip() or None
+    if owner_user_id != str(user.get("id") or ""):
+        owner_email = None
 
     with get_con(_db_path()) as con:
         cur = con.execute(
@@ -818,6 +830,10 @@ def update_device(device_id: int):
     if auth_error:
         return auth_error
 
+    owner_user_id, owner_error = _resolve_owner_user_id(user)
+    if owner_error:
+        return owner_error
+
     data = request.get_json(silent=True) or {}
 
     fields = []
@@ -847,7 +863,7 @@ def update_device(device_id: int):
     if not fields:
         return jsonify({"error": "provide at least one field: name, monthly_threshold_wh"}), 400
 
-    params.extend([device_id, user["id"]])
+    params.extend([device_id, owner_user_id])
 
     with get_con(_db_path()) as con:
         cur = con.execute(
@@ -863,7 +879,7 @@ def update_device(device_id: int):
             FROM devices
             WHERE id = ? AND owner_user_id = ?
             """,
-            (device_id, user["id"]),
+            (device_id, owner_user_id),
         ).fetchone()
 
     return jsonify(dict(row)), 200
@@ -877,11 +893,15 @@ def delete_device(device_id: int):
     if auth_error:
         return auth_error
 
+    owner_user_id, owner_error = _resolve_owner_user_id(user)
+    if owner_error:
+        return owner_error
+
     with get_con(_db_path()) as con:
         # Verificar que exista
         row = con.execute(
             "SELECT id, name FROM devices WHERE id = ? AND owner_user_id = ?",
-            (device_id, user["id"]),
+            (device_id, owner_user_id),
         ).fetchone()
         if not row:
             return jsonify({"error": "device not found"}), 404

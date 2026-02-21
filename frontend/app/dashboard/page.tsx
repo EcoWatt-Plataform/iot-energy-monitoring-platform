@@ -33,7 +33,20 @@ ChartJS.register(
 type Plan = "basico" | "avanzado" | "premium";
 type DownloadKind = "monthly" | "daily" | "alerts";
 
-type Device = { id: number; name: string };
+type Device = {
+  id: number;
+  name: string;
+  monthly_threshold_wh?: number;
+  created_at?: string;
+};
+
+type CreateDeviceResponse = {
+  id?: number;
+  name?: string;
+  api_key?: string;
+  monthly_threshold_wh?: number;
+  error?: string;
+};
 
 type DailyPoint = { date: string; kwh: number };
 type DailyChartDataset = {
@@ -263,6 +276,10 @@ export default function DashboardPage() {
   const [downloadingCsv, setDownloadingCsv] = useState<DownloadKind | null>(null);
   const [copyingToken, setCopyingToken] = useState(false);
   const [tokenCopyMessage, setTokenCopyMessage] = useState<string | null>(null);
+  const [creatingDevice, setCreatingDevice] = useState(false);
+  const [newDeviceName, setNewDeviceName] = useState("");
+  const [newDeviceThresholdWh, setNewDeviceThresholdWh] = useState("0");
+  const [createdDeviceApiKey, setCreatedDeviceApiKey] = useState<string | null>(null);
 
   const [devices, setDevices] = useState<Device[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null);
@@ -439,6 +456,62 @@ export default function DashboardPage() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Error cargando dispositivos");
     setDevices(Array.isArray(data) ? data : []);
+  }
+
+  async function createDeviceForCurrentView() {
+    if (!asUserId) return;
+
+    const name = newDeviceName.trim();
+    if (!name) {
+      setErr("El nombre del dispositivo es obligatorio.");
+      return;
+    }
+
+    const threshold = Number(newDeviceThresholdWh);
+    if (!Number.isFinite(threshold) || threshold < 0) {
+      setErr("El umbral mensual debe ser un numero mayor o igual a 0.");
+      return;
+    }
+
+    setCreatingDevice(true);
+    setErr(null);
+    setCreatedDeviceApiKey(null);
+    try {
+      const res = await authFetch("/api/v1/devices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          monthly_threshold_wh: threshold,
+        }),
+      });
+
+      const payload = (await res.json().catch(() => ({}))) as CreateDeviceResponse;
+      if (!res.ok) {
+        throw new Error(payload.error || "No se pudo crear el dispositivo.");
+      }
+
+      const createdId = typeof payload.id === "number" ? payload.id : null;
+      setCreatedDeviceApiKey(
+        typeof payload.api_key === "string" && payload.api_key.trim()
+          ? payload.api_key
+          : null
+      );
+      setNewDeviceName("");
+      setNewDeviceThresholdWh("0");
+
+      await loadDevices();
+      if (createdId !== null) {
+        setSelectedDeviceId(createdId);
+      }
+      await loadSummary(month, createdId);
+      await loadDaily(month, createdId);
+      setHasLoadedDaily(true);
+    } catch (error: unknown) {
+      setErr(getErrorMessage(error, "No se pudo crear el dispositivo."));
+    } finally {
+      setCreatingDevice(false);
+    }
   }
 
   async function loadSummary(nextMonth = month, nextDeviceId = selectedDeviceId) {
@@ -1103,6 +1176,68 @@ export default function DashboardPage() {
             Volver a mi dashboard
           </Link>
         </div>
+      )}
+
+      {asUserId && (
+        <section style={{ ...sectionBox, ...fadeUp(60), marginTop: "12px" }} className="dashboard-surface">
+          <h2 style={{ marginTop: 0, marginBottom: "6px" }}>Gestion de dispositivos (admin)</h2>
+          <p style={{ margin: 0, color: "#666", fontSize: "13px" }}>
+            Crea dispositivos para el usuario que estas visualizando.
+          </p>
+          <div
+            style={{
+              marginTop: "12px",
+              display: "grid",
+              gap: "10px",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              alignItems: "end",
+            }}
+          >
+            <input
+              type="text"
+              value={newDeviceName}
+              onChange={(e) => setNewDeviceName(e.target.value)}
+              placeholder="Nombre del dispositivo"
+              style={inputStyle}
+            />
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={newDeviceThresholdWh}
+              onChange={(e) => setNewDeviceThresholdWh(e.target.value)}
+              placeholder="Umbral mensual (Wh)"
+              style={inputStyle}
+            />
+            <button
+              type="button"
+              onClick={createDeviceForCurrentView}
+              disabled={creatingDevice}
+              style={refreshBtn}
+              className="dashboard-lift-btn dashboard-control-btn"
+            >
+              {creatingDevice ? "Creando..." : "Agregar dispositivo"}
+            </button>
+          </div>
+          {createdDeviceApiKey && (
+            <div
+              style={{
+                marginTop: "10px",
+                border: "1px solid #bfdbfe",
+                background: "#eff6ff",
+                borderRadius: "10px",
+                padding: "10px 12px",
+              }}
+            >
+              <div style={{ fontSize: "13px", color: "#1e3a8a", marginBottom: "4px" }}>
+                API key del nuevo dispositivo:
+              </div>
+              <code style={{ fontSize: "12px", color: "#0f172a", wordBreak: "break-all" }}>
+                {createdDeviceApiKey}
+              </code>
+            </div>
+          )}
+        </section>
       )}
 
       {/* Filtros */}
