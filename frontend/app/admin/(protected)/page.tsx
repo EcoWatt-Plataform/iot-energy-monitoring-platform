@@ -293,7 +293,7 @@ export default function AdminPage() {
       return;
     }
     if (password.length < 6) {
-      setErrorText("La contrasena debe tener al menos 6 caracteres.");
+      setErrorText("La contraseña debe tener al menos 6 caracteres.");
       return;
     }
 
@@ -588,7 +588,7 @@ export default function AdminPage() {
           <input
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="Contrasena inicial"
+            placeholder="Contraseña inicial"
             type="password"
             style={inputStyle}
           />
@@ -609,13 +609,13 @@ export default function AdminPage() {
           <input
             value={newDocumentNumber}
             onChange={(e) => setNewDocumentNumber(e.target.value)}
-            placeholder="Numero de documento"
+            placeholder="Número de documento"
             style={inputStyle}
           />
           <input
             value={newPhone}
             onChange={(e) => setNewPhone(e.target.value)}
-            placeholder="Telefono"
+            placeholder="Teléfono"
             style={inputStyle}
           />
           <input
@@ -627,7 +627,7 @@ export default function AdminPage() {
           <input
             value={newAddress}
             onChange={(e) => setNewAddress(e.target.value)}
-            placeholder="Direccion (calle/altura)"
+            placeholder="Dirección (calle/altura)"
             style={inputStyle}
           />
           <input
@@ -645,7 +645,7 @@ export default function AdminPage() {
           <input
             value={newCountry}
             onChange={(e) => setNewCountry(e.target.value)}
-            placeholder="Pais"
+            placeholder="País"
             style={inputStyle}
           />
           <select value={newPlan} onChange={(e) => setNewPlan(e.target.value as Plan)} style={selectStyle}>
@@ -710,13 +710,13 @@ export default function AdminPage() {
                   <Th>Email</Th>
                   <Th>Nombre</Th>
                   <Th>Documento</Th>
-                  <Th>Telefono</Th>
-                  <Th>Direccion</Th>
+                  <Th>Teléfono</Th>
+                  <Th>Dirección</Th>
                   <Th>Plan</Th>
                   <Th>Rol</Th>
                   <Th>Dispositivos</Th>
                   <Th>Alta</Th>
-                  <Th>Ultimo login</Th>
+                  <Th>Último login</Th>
                   <Th>Acciones</Th>
                 </tr>
               </thead>
@@ -852,7 +852,7 @@ export default function AdminPage() {
                                   value={draft.birth_date || "-"}
                                 />
                                 <DetailItem
-                                  label="Direccion resumida"
+                                  label="Dirección resumida"
                                   value={formatAddress(user)}
                                 />
                               </div>
@@ -886,7 +886,7 @@ export default function AdminPage() {
                                 </div>
 
                                 <div>
-                                  <div style={fieldLabelStyle}>Numero documento</div>
+                                  <div style={fieldLabelStyle}>Número documento</div>
                                   <input
                                     value={draft.document_number}
                                     onChange={(e) =>
@@ -899,12 +899,12 @@ export default function AdminPage() {
                                 </div>
 
                                 <div>
-                                  <div style={fieldLabelStyle}>Telefono</div>
+                                  <div style={fieldLabelStyle}>Teléfono</div>
                                   <input
                                     value={draft.phone}
                                     onChange={(e) => setProfileField(user.id, "phone", e.target.value)}
                                     disabled={busy}
-                                    placeholder="Telefono"
+                                    placeholder="Teléfono"
                                     style={inputStyle}
                                   />
                                 </div>
@@ -921,12 +921,12 @@ export default function AdminPage() {
                                 </div>
 
                                 <div>
-                                  <div style={fieldLabelStyle}>Direccion</div>
+                                  <div style={fieldLabelStyle}>Dirección</div>
                                   <input
                                     value={draft.address}
                                     onChange={(e) => setProfileField(user.id, "address", e.target.value)}
                                     disabled={busy}
-                                    placeholder="Calle y numero"
+                                    placeholder="Calle y número"
                                     style={inputStyle}
                                   />
                                 </div>
@@ -954,12 +954,12 @@ export default function AdminPage() {
                                 </div>
 
                                 <div>
-                                  <div style={fieldLabelStyle}>Pais</div>
+                                  <div style={fieldLabelStyle}>País</div>
                                   <input
                                     value={draft.country}
                                     onChange={(e) => setProfileField(user.id, "country", e.target.value)}
                                     disabled={busy}
-                                    placeholder="Pais"
+                                    placeholder="País"
                                     style={inputStyle}
                                   />
                                 </div>
