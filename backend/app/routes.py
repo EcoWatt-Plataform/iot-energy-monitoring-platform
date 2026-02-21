@@ -1,6 +1,12 @@
+import json
 import secrets
+import time
+import threading
 from datetime import datetime
 from flask import Blueprint, current_app, jsonify, request, render_template
+from urllib import error as urlerror
+from urllib import parse as urlparse
+from urllib import request as urlrequest
 
 from .db import get_con
 
@@ -9,6 +15,126 @@ web_bp = Blueprint("web", __name__)
 
 def _db_path() -> str:
     return current_app.config["SETTINGS"].db_path
+
+def _auth_config():
+    settings = current_app.config["SETTINGS"]
+    return settings.supabase_url, settings.supabase_anon_key
+
+def _extract_bearer_token() -> str:
+    auth_header = (request.headers.get("Authorization") or "").strip()
+    if not auth_header.lower().startswith("bearer "):
+        return ""
+    return auth_header[7:].strip()
+
+# ---------------------------------------------------------------------------
+# Simple in-process token cache with configurable TTL (default 60 s)
+# ---------------------------------------------------------------------------
+_TOKEN_CACHE_TTL = 60  # seconds
+_TOKEN_CACHE_MAX_SIZE = 1000
+_token_cache: dict[str, tuple[dict, float]] = {}
+_token_cache_lock = threading.Lock()
+
+
+def _cached_fetch_supabase_user(access_token: str) -> dict | None:
+    """Return cached user dict or fetch from Supabase and cache the result."""
+    now = time.monotonic()
+    with _token_cache_lock:
+        entry = _token_cache.get(access_token)
+        if entry is not None:
+            user, expires_at = entry
+            if now < expires_at:
+                return user
+            # Expired – remove stale entry
+            del _token_cache[access_token]
+
+    user = _fetch_supabase_user(access_token)
+
+    if user and user.get("id"):
+        with _token_cache_lock:
+            # Evict all expired entries if at capacity before inserting
+            if len(_token_cache) >= _TOKEN_CACHE_MAX_SIZE:
+                expired_keys = [k for k, (_, exp) in _token_cache.items() if now >= exp]
+                for k in expired_keys:
+                    del _token_cache[k]
+                # If still at capacity after eviction, remove oldest entries
+                if len(_token_cache) >= _TOKEN_CACHE_MAX_SIZE:
+                    overflow = len(_token_cache) - _TOKEN_CACHE_MAX_SIZE + 1
+                    for k in list(_token_cache.keys())[:overflow]:
+                        del _token_cache[k]
+            _token_cache[access_token] = (user, now + _TOKEN_CACHE_TTL)
+
+    return user
+
+def _fetch_supabase_user(access_token: str):
+    if not access_token:
+        return None
+
+    supabase_url, supabase_anon_key = _auth_config()
+    if not supabase_url or not supabase_anon_key:
+        raise RuntimeError("Supabase auth is not configured on backend.")
+
+    user_endpoint = urlparse.urljoin(supabase_url.rstrip("/") + "/", "auth/v1/user")
+    req = urlrequest.Request(
+        user_endpoint,
+        headers={
+            "apikey": supabase_anon_key,
+            "Authorization": f"Bearer {access_token}",
+        },
+    )
+
+    try:
+        with urlrequest.urlopen(req, timeout=5) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+            return payload
+    except urlerror.HTTPError as e:
+        if e.code in (401, 403):
+            return None
+        raise
+
+def _require_user():
+    token = _extract_bearer_token()
+    if not token:
+        return None, (jsonify({"error": "Missing bearer token"}), 401)
+
+    try:
+        user = _cached_fetch_supabase_user(token)
+    except RuntimeError as e:
+        return None, (jsonify({"error": str(e)}), 500)
+    except Exception:
+        return None, (jsonify({"error": "Could not validate Supabase token"}), 500)
+
+    if not user or not user.get("id"):
+        return None, (jsonify({"error": "Invalid or expired token"}), 401)
+
+    return user, None
+
+
+_PLAN_ALIASES: dict[str, str] = {
+    "premium": "premium",
+    "plan_premium": "premium",
+    "pro": "premium",
+    "avanzado": "avanzado",
+    "advanced": "avanzado",
+    "plan_avanzado": "avanzado",
+}
+_PLAN_METADATA_KEYS = ("plan", "subscription_plan", "subscription", "tier", "plan_name")
+
+
+def _normalize_plan(value: object) -> str:
+    """Return canonical plan name from a raw metadata value."""
+    raw = str(value or "").strip().lower()
+    return _PLAN_ALIASES.get(raw, "basico")
+
+
+def _plan_from_user(user: dict) -> str:
+    """Extract the subscription plan from a Supabase user object."""
+    meta = user.get("user_metadata") or {}
+    if not isinstance(meta, dict):
+        meta = {}
+    for key in _PLAN_METADATA_KEYS:
+        if key in meta:
+            return _normalize_plan(meta[key])
+    return "basico"
 
 @web_bp.get("/")
 def home():
@@ -28,6 +154,10 @@ def create_device():
     Body JSON: { "name": "Casa", "monthly_threshold_wh": 25000 }
     Respuesta: { id, name, api_key, monthly_threshold_wh }
     """
+    user, auth_error = _require_user()
+    if auth_error:
+        return auth_error
+
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "").strip()
     threshold = float(data.get("monthly_threshold_wh") or 0)
@@ -36,11 +166,16 @@ def create_device():
         return jsonify({"error": "name is required"}), 400
 
     api_key = secrets.token_hex(16)
+    owner_user_id = user["id"]
+    owner_email = (user.get("email") or "").strip() or None
 
     with get_con(_db_path()) as con:
         cur = con.execute(
-            "INSERT INTO devices(name, api_key, monthly_threshold_wh) VALUES (?, ?, ?)",
-            (name, api_key, threshold),
+            """
+            INSERT INTO devices(name, api_key, owner_user_id, owner_email, monthly_threshold_wh)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (name, api_key, owner_user_id, owner_email, threshold),
         )
         device_id = cur.lastrowid
 
@@ -54,15 +189,29 @@ def create_device():
 
 @api_bp.get("/devices")
 def list_devices():
+    user, auth_error = _require_user()
+    if auth_error:
+        return auth_error
+
     with get_con(_db_path()) as con:
         rows = con.execute(
-            "SELECT id, name, monthly_threshold_wh, created_at FROM devices ORDER BY id"
+            """
+            SELECT id, name, monthly_threshold_wh, created_at
+            FROM devices
+            WHERE owner_user_id = ?
+            ORDER BY id
+            """,
+            (user["id"],),
         ).fetchall()
 
     return jsonify([dict(r) for r in rows])
 
 @api_bp.patch("/devices/<int:device_id>")
 def update_device(device_id: int):
+    user, auth_error = _require_user()
+    if auth_error:
+        return auth_error
+
     data = request.get_json(silent=True) or {}
 
     fields = []
@@ -92,19 +241,23 @@ def update_device(device_id: int):
     if not fields:
         return jsonify({"error": "provide at least one field: name, monthly_threshold_wh"}), 400
 
-    params.append(device_id)
+    params.extend([device_id, user["id"]])
 
     with get_con(_db_path()) as con:
         cur = con.execute(
-            f"UPDATE devices SET {', '.join(fields)} WHERE id = ?",
+            f"UPDATE devices SET {', '.join(fields)} WHERE id = ? AND owner_user_id = ?",
             tuple(params),
         )
         if cur.rowcount == 0:
             return jsonify({"error": "device not found"}), 404
 
         row = con.execute(
-            "SELECT id, name, monthly_threshold_wh, created_at FROM devices WHERE id = ?",
-            (device_id,),
+            """
+            SELECT id, name, monthly_threshold_wh, created_at
+            FROM devices
+            WHERE id = ? AND owner_user_id = ?
+            """,
+            (device_id, user["id"]),
         ).fetchone()
 
     return jsonify(dict(row)), 200
@@ -114,9 +267,16 @@ def delete_device(device_id: int):
     """
     Elimina un dispositivo y sus mediciones.
     """
+    user, auth_error = _require_user()
+    if auth_error:
+        return auth_error
+
     with get_con(_db_path()) as con:
         # Verificar que exista
-        row = con.execute("SELECT id, name FROM devices WHERE id = ?", (device_id,)).fetchone()
+        row = con.execute(
+            "SELECT id, name FROM devices WHERE id = ? AND owner_user_id = ?",
+            (device_id, user["id"]),
+        ).fetchone()
         if not row:
             return jsonify({"error": "device not found"}), 404
 
@@ -195,6 +355,10 @@ def summary_month():
     Devuelve totales del mes + stats por dispositivo.
     Si se pasa device_id, filtra solo ese dispositivo.
     """
+    user, auth_error = _require_user()
+    if auth_error:
+        return auth_error
+
     month = (request.args.get("month") or "").strip()
     if not month or len(month) != 7:
         return jsonify({"error": "month must be YYYY-MM"}), 400
@@ -217,12 +381,13 @@ def summary_month():
         LEFT JOIN measurements m
           ON m.device_id = d.id
          AND substr(m.ts, 1, 7) = ?
+        WHERE d.owner_user_id = ?
     """
 
-    params = [month]
+    params = [month, user["id"]]
 
     if device_id is not None:
-        base_sql += "\nWHERE d.id = ?"
+        base_sql += "\nAND d.id = ?"
         params.append(device_id)
 
     base_sql += """
@@ -232,6 +397,39 @@ def summary_month():
 
     with get_con(_db_path()) as con:
         rows = con.execute(base_sql, tuple(params)).fetchall()
+
+        # Para cada dispositivo con alerta, detectamos el primer timestamp
+        # en el que la energía acumulada del mes supera su umbral.
+        threshold_map: dict[int, float] = {}
+        for r in rows:
+            energy_wh = float(r["energy_wh"] or 0)
+            thr = float(r["monthly_threshold_wh"] or 0)
+            if thr > 0 and energy_wh > thr:
+                threshold_map[int(r["id"])] = thr
+
+        crossed_at_by_device: dict[int, str] = {}
+        if threshold_map:
+            placeholders = ",".join("?" for _ in threshold_map)
+            crossing_rows = con.execute(
+                f"""
+                SELECT m.device_id, m.ts, m.energy_wh
+                FROM measurements m
+                WHERE m.device_id IN ({placeholders})
+                  AND substr(m.ts, 1, 7) = ?
+                ORDER BY m.device_id ASC, m.ts ASC, m.id ASC
+                """,
+                tuple(list(threshold_map.keys()) + [month]),
+            ).fetchall()
+
+            running_wh: dict[int, float] = {}
+            for row in crossing_rows:
+                dev_id = int(row["device_id"])
+                if dev_id in crossed_at_by_device:
+                    continue
+
+                running_wh[dev_id] = running_wh.get(dev_id, 0.0) + float(row["energy_wh"] or 0.0)
+                if running_wh[dev_id] > threshold_map[dev_id]:
+                    crossed_at_by_device[dev_id] = str(row["ts"])
 
     devices = []
     alerts = []
@@ -255,11 +453,16 @@ def summary_month():
 
         thr = float(item["monthly_threshold_wh"] or 0)
         if thr > 0 and item["energy_wh"] > thr:
+            exceed_wh = max(0.0, item["energy_wh"] - thr)
+            exceed_pct = (exceed_wh / thr * 100.0) if thr > 0 else 0.0
             alerts.append({
                 "device_id": item["id"],
                 "device_name": item["name"],
                 "energy_wh": item["energy_wh"],
                 "threshold_wh": thr,
+                "exceed_wh": exceed_wh,
+                "exceed_pct": round(exceed_pct, 2),
+                "crossed_at": crossed_at_by_device.get(int(item["id"])),
                 "type": "MONTHLY_THRESHOLD_EXCEEDED"
             })
 
@@ -286,6 +489,10 @@ def metrics_daily():
 
     Devuelve consumo diario agrupado por día (YYYY-MM-DD).
     """
+    user, auth_error = _require_user()
+    if auth_error:
+        return auth_error
+
     device_id = request.args.get("device_id", type=int)
     date_from = (request.args.get("from") or "").strip()
     date_to = (request.args.get("to") or "").strip()
@@ -298,6 +505,13 @@ def metrics_daily():
         return jsonify({"error": "to must be YYYY-MM-DD"}), 400
 
     with get_con(_db_path()) as con:
+        owns_device = con.execute(
+            "SELECT 1 FROM devices WHERE id = ? AND owner_user_id = ?",
+            (device_id, user["id"]),
+        ).fetchone()
+        if not owns_device:
+            return jsonify({"error": "device not found"}), 404
+
         rows = con.execute(
             """
             SELECT
@@ -348,6 +562,13 @@ def export_measurements_csv():
     - month (YYYY-MM) requerido
     - device_id opcional (si no, exporta todos)
     """
+    user, auth_error = _require_user()
+    if auth_error:
+        return auth_error
+
+    if _plan_from_user(user) != "premium":
+        return jsonify({"error": "CSV export requires a Premium plan"}), 403
+
     month = (request.args.get("month") or "").strip()
     device_id = request.args.get("device_id", type=int)
 
@@ -378,12 +599,13 @@ def export_measurements_csv():
                   m.energy_wh
                 FROM measurements m
                 JOIN devices d ON d.id = m.device_id
-                WHERE substr(m.ts, 1, 10) >= ?
+                WHERE d.owner_user_id = ?
+                  AND substr(m.ts, 1, 10) >= ?
                   AND substr(m.ts, 1, 10) <= ?
                   AND m.device_id = ?
                 ORDER BY m.ts ASC
                 """,
-                (date_from, date_to, device_id),
+                (user["id"], date_from, date_to, device_id),
             ).fetchall()
         else:
             rows = con.execute(
@@ -398,11 +620,12 @@ def export_measurements_csv():
                   m.energy_wh
                 FROM measurements m
                 JOIN devices d ON d.id = m.device_id
-                WHERE substr(m.ts, 1, 10) >= ?
+                WHERE d.owner_user_id = ?
+                  AND substr(m.ts, 1, 10) >= ?
                   AND substr(m.ts, 1, 10) <= ?
                 ORDER BY m.ts ASC
                 """,
-                (date_from, date_to),
+                (user["id"], date_from, date_to),
             ).fetchall()
 
     output = io.StringIO()
@@ -438,6 +661,13 @@ def export_daily_csv():
     """
     GET /api/v1/export/daily.csv?month=YYYY-MM&device_id=1
     """
+    user, auth_error = _require_user()
+    if auth_error:
+        return auth_error
+
+    if _plan_from_user(user) != "premium":
+        return jsonify({"error": "CSV export requires a Premium plan"}), 403
+
     month = (request.args.get("month") or "").strip()
     device_id = request.args.get("device_id", type=int)
 
@@ -465,13 +695,14 @@ def export_daily_csv():
                   SUM(m.energy_wh) AS energy_wh
                 FROM measurements m
                 JOIN devices d ON d.id = m.device_id
-                WHERE substr(m.ts, 1, 10) >= ?
+                WHERE d.owner_user_id = ?
+                  AND substr(m.ts, 1, 10) >= ?
                   AND substr(m.ts, 1, 10) <= ?
                   AND m.device_id = ?
                 GROUP BY day, m.device_id, d.name
                 ORDER BY day ASC
                 """,
-                (date_from, date_to, device_id),
+                (user["id"], date_from, date_to, device_id),
             ).fetchall()
         else:
             rows = con.execute(
@@ -483,12 +714,13 @@ def export_daily_csv():
                   SUM(m.energy_wh) AS energy_wh
                 FROM measurements m
                 JOIN devices d ON d.id = m.device_id
-                WHERE substr(m.ts, 1, 10) >= ?
+                WHERE d.owner_user_id = ?
+                  AND substr(m.ts, 1, 10) >= ?
                   AND substr(m.ts, 1, 10) <= ?
                 GROUP BY day, m.device_id, d.name
                 ORDER BY day ASC, m.device_id ASC
                 """,
-                (date_from, date_to),
+                (user["id"], date_from, date_to),
             ).fetchall()
 
     output = io.StringIO()
@@ -517,6 +749,13 @@ def export_alerts_csv():
     GET /api/v1/export/alerts.csv?month=YYYY-MM&device_id=1
     Exporta alertas del mes: dispositivos cuyo consumo mensual supera monthly_threshold_wh.
     """
+    user, auth_error = _require_user()
+    if auth_error:
+        return auth_error
+
+    if _plan_from_user(user) != "premium":
+        return jsonify({"error": "CSV export requires a Premium plan"}), 403
+
     month = (request.args.get("month") or "").strip()
     device_id = request.args.get("device_id", type=int)
 
@@ -537,12 +776,13 @@ def export_alerts_csv():
                 LEFT JOIN measurements m
                     ON m.device_id = d.id
                 AND substr(m.ts, 1, 7) = ?
-                WHERE d.id = ?
+                WHERE d.owner_user_id = ?
+                  AND d.id = ?
                 GROUP BY d.id, d.name, d.monthly_threshold_wh
                 HAVING COALESCE(SUM(m.energy_wh), 0) > COALESCE(d.monthly_threshold_wh, 0)
                 ORDER BY COALESCE(SUM(m.energy_wh), 0) DESC
                 """,
-                (month, device_id),
+                (month, user["id"], device_id),
             ).fetchall()
 
         else:
@@ -557,11 +797,12 @@ def export_alerts_csv():
                 LEFT JOIN measurements m
                     ON m.device_id = d.id
                 AND substr(m.ts, 1, 7) = ?
-                    GROUP BY d.id, d.name, d.monthly_threshold_wh
+                WHERE d.owner_user_id = ?
+                GROUP BY d.id, d.name, d.monthly_threshold_wh
                 HAVING COALESCE(SUM(m.energy_wh), 0) > COALESCE(d.monthly_threshold_wh, 0)
                 ORDER BY COALESCE(SUM(m.energy_wh), 0) DESC
                 """,
-                (month,),
+                (month, user["id"]),
             ).fetchall()
 
 

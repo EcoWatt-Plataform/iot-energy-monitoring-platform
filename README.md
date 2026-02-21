@@ -102,6 +102,13 @@ npm run dev
 La aplicación estará disponible en `http://localhost:3000`.
 El frontend está configurado para redirigir las llamadas `/api/*` automáticamente al backend (`http://127.0.0.1:5000`) para evitar problemas de CORS en desarrollo.
 
+## 🌐 Deploy en producción (dominio `ecowatt.ar`)
+
+Se agregó una guía paso a paso para publicar toda la aplicación (Flask + Next.js) con Nginx, systemd y HTTPS:
+
+- [`docs/deploy-ecowatt-ar.md`](docs/deploy-ecowatt-ar.md)
+- Plantillas listas en `deploy/ecowatt.ar/` (services, Nginx y `.env` de ejemplo)
+
 ## 📊 Endpoints Disponibles
 
 La API se encuentra prefijada bajo `/api/v1`.

@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 const HERO_IMG = "/banner1.jpeg";
 
 type Slide = {
   id: number;
   title: string;
   subtitle: string;
-  primaryCta: { label: string; href: string };
+  primaryCta?: { label: string; href: string };
   secondaryCta?: { label: string; href: string };
 };
 
@@ -18,20 +19,19 @@ export default function HomePage() {
         id: 1,
         title: "Te ayudamos a entender y ahorrar",
         subtitle: "Realizá un seguimiento del consumo energético.",
-        primaryCta: { label: "Leer más", href: "/producto" },
+        primaryCta: { label: "Ver producto", href: "/producto" },
       },
       {
         id: 2,
         title: "Históricos claros y alertas inteligentes",
         subtitle: "Compará días, semanas y meses y detectá consumos anómalos a tiempo.",
-        primaryCta: { label: "Abrir dashboard", href: "/dashboard" },
         secondaryCta: { label: "Ver planes", href: "/planes" },
       },
       {
         id: 3,
         title: "Ahorrá más con el Plan Premium",
         subtitle: "Accedé a análisis avanzados, alertas y comparaciones para optimizar tu consumo.",
-        primaryCta: { label: "Ver plan", href: "/planes/premium" },
+        primaryCta: { label: "Ver plan Premium", href: "/planes/premium" },
       },
     ],
     []
@@ -52,6 +52,14 @@ export default function HomePage() {
     }, []);
 
   const current = slides[index];
+  const ctaStyle: React.CSSProperties = {
+    padding: "12px 16px",
+    borderRadius: "12px",
+    textDecoration: "none",
+    color: "white",
+    background: "linear-gradient(90deg, #6992eb, #9b6ceb)",
+    fontWeight: 700,
+  };
 
   function prev() {
     setIndex((i) => (i === 0 ? slides.length - 1 : i - 1));
@@ -146,32 +154,19 @@ export default function HomePage() {
                   flexWrap: "wrap",
                 }}
               >
-                <a
-                  href={current.primaryCta.href}
-                  style={{
-                    padding: "12px 16px",
-                    borderRadius: "12px",
-                    textDecoration: "none",
-                    color: "white",
-                    background: "linear-gradient(90deg, #6992eb, #9b6ceb)",
-                    fontWeight: 700,
-                  }}
-                >
-                  {current.primaryCta.label}
-                </a>
+                {current.primaryCta && (
+                  <a
+                    href={current.primaryCta.href}
+                    style={ctaStyle}
+                  >
+                    {current.primaryCta.label}
+                  </a>
+                )}
 
                 {current.secondaryCta && (
                   <a
                     href={current.secondaryCta.href}
-                    style={{
-                      padding: "12px 16px",
-                      borderRadius: "12px",
-                      textDecoration: "none",
-                      color: "white",
-                      border: "1px solid rgba(255,255,255,0.6)",
-                      background: "rgba(0,0,0,0.3)",
-                      fontWeight: 700,
-                    }}
+                    style={ctaStyle}
                   >
                     {current.secondaryCta.label}
                   </a>
@@ -180,44 +175,51 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Flechas */}
-          <button type="button" onClick={prev} style={arrowBtn("left", isMobile)}>
-            ‹
-          </button>
-
-          <button type="button" onClick={next} style={arrowBtn("right", isMobile)}>
-            ›
-          </button>
-
-          {/* Dots */}
+          {/* Controles del slider */}
           <div
             style={{
               position: "absolute",
               left: "50%",
-              bottom: "20px",
+              bottom: isMobile ? "14px" : "20px",
               transform: "translateX(-50%)",
               display: "flex",
-              gap: "10px",
+              alignItems: "center",
+              gap: isMobile ? "10px" : "14px",
+              padding: isMobile ? "6px 10px" : "8px 12px",
+              borderRadius: "999px",
+              background: "rgba(0,0,0,0.28)",
+              border: "1px solid rgba(255,255,255,0.2)",
             }}
           >
-            {slides.map((s, i) => (
-              <button
-                key={s.id}
-                onClick={() => setIndex(i)}
-                style={{
-                  width: i === index ? "26px" : "10px",
-                  height: "10px",
-                  borderRadius: "999px",
-                  border: "none",
-                  cursor: "pointer",
-                  backgroundColor:
-                    i === index
-                      ? "rgba(255,255,255,0.9)"
-                      : "rgba(255,255,255,0.35)",
-                  transition: "all 160ms ease",
-                }}
-              />
-            ))}
+            <button type="button" onClick={prev} style={arrowBtn(isMobile)} aria-label="Slide anterior">
+              &lt;
+            </button>
+
+            <div style={{ display: "flex", gap: "8px" }}>
+              {slides.map((s, i) => (
+                <button
+                  key={s.id}
+                  onClick={() => setIndex(i)}
+                  aria-label={`Ir al slide ${i + 1}`}
+                  style={{
+                    width: i === index ? "20px" : "8px",
+                    height: "8px",
+                    borderRadius: "999px",
+                    border: "none",
+                    cursor: "pointer",
+                    backgroundColor:
+                      i === index
+                        ? "rgba(255,255,255,0.95)"
+                        : "rgba(255,255,255,0.4)",
+                    transition: "all 160ms ease",
+                  }}
+                />
+              ))}
+            </div>
+
+            <button type="button" onClick={next} style={arrowBtn(isMobile)} aria-label="Slide siguiente">
+              &gt;
+            </button>
           </div>
         </section>
       <section
@@ -396,20 +398,17 @@ function ArrowBetween() {
   );
 }
 
-function arrowBtn(side: "left" | "right", isMobile: boolean): React.CSSProperties {
+function arrowBtn(isMobile: boolean): React.CSSProperties {
   return {
-    position: "absolute",
-    top: isMobile ? "85%" : "50%",
-    transform: "translateY(-50%)",
-    ...(side === "left" ? { left: isMobile ? "20px" : "18px" } : { right: isMobile ? "20px" : "18px" }),
-    width: "46px",
-    height: "46px",
+    width: isMobile ? "34px" : "38px",
+    height: isMobile ? "34px" : "38px",
     borderRadius: "999px",
-    border: "1px solid rgba(255,255,255,0.25)",
-    background: "rgba(0,0,0,0.25)",
+    border: "1px solid rgba(255,255,255,0.35)",
+    background: "rgba(255,255,255,0.18)",
     color: "white",
     cursor: "pointer",
-    fontSize: "28px",
+    fontSize: isMobile ? "18px" : "20px",
+    lineHeight: 1,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
