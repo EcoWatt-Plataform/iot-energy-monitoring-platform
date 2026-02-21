@@ -22,8 +22,6 @@ class Settings:
     app_secret: str
     supabase_url: str
     supabase_anon_key: str
-    supabase_service_role_key: str
-    admin_emails: tuple[str, ...]
 
     @staticmethod
     def load() -> "Settings":
@@ -56,20 +54,9 @@ class Settings:
                 "NEXT_PUBLIC_SUPABASE_ANON_KEY / "
                 "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY)."
             )
-
-        supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-
-        raw_admin_emails = os.getenv("ADMIN_EMAILS", "")
-        admin_emails = tuple(
-            email.strip().lower()
-            for email in raw_admin_emails.split(",")
-            if email.strip()
-        )
         return Settings(
             db_path=os.getenv("DB_PATH", "./data/sisterna.sqlite"),
             app_secret=os.getenv("APP_SECRET", "dev-secret"),
             supabase_url=supabase_url,
             supabase_anon_key=supabase_anon_key,
-            supabase_service_role_key=supabase_service_role_key,
-            admin_emails=admin_emails,
         )

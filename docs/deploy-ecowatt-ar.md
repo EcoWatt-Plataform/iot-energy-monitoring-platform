@@ -112,10 +112,13 @@ Agregar en el bloque `http {}` de `/etc/nginx/nginx.conf` (antes del primer `ser
 limit_req_zone $binary_remote_addr zone=api_limit:10m rate=30r/s;
 ```
 
+Crear el directorio webroot para ACME si no existe:
+
 ```bash
-sudo nginx -t
-sudo systemctl reload nginx
+sudo mkdir -p /var/www/html
 ```
+
+> ⚠️ **Primer despliegue:** La configuración incluye un bloque HTTPS que referencia certificados de Let's Encrypt. En el primer deploy esos archivos todavía no existen, por lo que `sudo nginx -t` fallará. No ejecutes el test ni el reload ahora; seguí los pasos del apartado 7.
 
 ### DNS en tu proveedor (donde compraste `ecowatt.ar`)
 
@@ -127,11 +130,32 @@ Esperar propagación (`dig ecowatt.ar +short`).
 
 ## 7) HTTPS con Let's Encrypt
 
+La configuración de Nginx incluida en `deploy/ecowatt.ar/nginx-ecowatt.conf` ya fuerza redirección `http -> https` y espera que existan los siguientes archivos antes de arrancar:
+
+- `/etc/letsencrypt/live/ecowatt.ar/fullchain.pem`
+- `/etc/letsencrypt/live/ecowatt.ar/privkey.pem`
+- `/etc/letsencrypt/options-ssl-nginx.conf`
+- `/etc/letsencrypt/ssl-dhparams.pem`
+
+### Primer despliegue (bootstrap)
+
+En el primer deploy esos archivos no existen todavía. Para resolver el orden de dependencia, pará Nginx brevemente, emití los certificados con el modo `--standalone` de Certbot (que levanta su propio servidor HTTP temporal en el puerto 80) y luego iniciá Nginx con la configuración completa:
+
 ```bash
-sudo certbot --nginx -d ecowatt.ar -d www.ecowatt.ar --redirect -m tu-email@dominio.com --agree-tos -n
+# 1. Detener Nginx temporalmente para liberar el puerto 80
+sudo systemctl stop nginx
+
+# 2. Emitir certificados (Certbot usa su propio servidor en el puerto 80)
+sudo certbot certonly --standalone -d ecowatt.ar -d www.ecowatt.ar \
+    -m tu-email@dominio.com --agree-tos -n
+
+# 3. Verificar la configuración completa (los certificados ahora existen) e iniciar Nginx
+sudo nginx -t && sudo systemctl start nginx
 ```
 
-Chequeo renovación automática:
+### Renovaciones posteriores
+
+Una vez que los certificados existen, la renovación automática se encarga de todo. Para renovar manualmente o verificar la renovación automática:
 
 ```bash
 systemctl status certbot.timer

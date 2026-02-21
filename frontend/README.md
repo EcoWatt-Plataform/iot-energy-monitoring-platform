@@ -30,15 +30,6 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
    - Redirect URL: `http://localhost:3000/auth/callback` and/or `http://192.168.100.134:3000/auth/callback`
 5. In Supabase Auth > Providers > Google, enable Google and configure OAuth credentials.
 
-## Admin panel
-
-1. In backend env, set:
-   - `SUPABASE_SERVICE_ROLE_KEY`
-   - `ADMIN_EMAILS` (comma-separated emails allowed as admin)
-2. Start backend and frontend.
-3. Open `http://localhost:3000/admin/login`.
-4. Login with an admin account and manage users from `http://localhost:3000/admin`.
-
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

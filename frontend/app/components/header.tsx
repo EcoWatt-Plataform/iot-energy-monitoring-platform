@@ -22,7 +22,6 @@ export default function Header() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [isAuthBusy, setIsAuthBusy] = useState(false);
-  const [isAdminFromServer, setIsAdminFromServer] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!isHome) {
@@ -114,45 +113,6 @@ export default function Header() {
       }
     };
   }, []);
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    const checkAdminFromServer = async () => {
-      try {
-        if (!user) {
-          if (!isCancelled) setIsAdminFromServer(false);
-          return;
-        }
-
-        const supabase = createClient();
-        const { data, error } = await supabase.auth.getSession();
-
-        if (error || !data?.session?.access_token) {
-          if (!isCancelled) setIsAdminFromServer(false);
-          return;
-        }
-
-        const response = await fetch("/api/v1/admin/me", {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${data.session.access_token}`,
-          },
-        });
-
-        if (!isCancelled) setIsAdminFromServer(response.ok);
-      } catch (e) {
-        console.error("Failed to check admin status from server", e);
-        if (!isCancelled) setIsAdminFromServer(false);
-      }
-    };
-
-    checkAdminFromServer();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [user]);
 
   const shouldShowWhiteBar = !isHome || isHovered || isScrolled;
   const textColor = shouldShowWhiteBar ? "#111827" : "#ffffff";
@@ -305,7 +265,6 @@ export default function Header() {
 
   const userLabel =
     user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || "Cuenta";
-  const canAccessAdmin = isAdminFromServer === true;
 
   const logout = async () => {
     setIsAuthBusy(true);
@@ -422,11 +381,6 @@ export default function Header() {
             <span style={userBadgeStyle} title={String(userLabel)}>
               {String(userLabel)}
             </span>
-            {canAccessAdmin && (
-              <Link href="/admin" style={rightBtnStyle}>
-                Admin
-              </Link>
-            )}
             <Link href="/dashboard" style={rightBtnStyle}>
               Dashboard
             </Link>
@@ -489,15 +443,6 @@ export default function Header() {
                 >
                   {String(userLabel)}
                 </span>
-                {canAccessAdmin && (
-                  <Link
-                    href="/admin"
-                    style={mobileActionBtnStyle}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  >
-                    Ir al panel admin
-                  </Link>
-                )}
                 <Link
                   href="/dashboard"
                   style={mobileActionBtnStyle}

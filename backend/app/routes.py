@@ -20,10 +20,6 @@ def _auth_config():
     settings = current_app.config["SETTINGS"]
     return settings.supabase_url, settings.supabase_anon_key
 
-def _admin_auth_config():
-    settings = current_app.config["SETTINGS"]
-    return settings.supabase_url, settings.supabase_service_role_key
-
 def _extract_bearer_token() -> str:
     auth_header = (request.headers.get("Authorization") or "").strip()
     if not auth_header.lower().startswith("bearer "):
@@ -113,103 +109,6 @@ def _require_user():
     return user, None
 
 
-def _is_admin_user(user: dict) -> bool:
-    settings = current_app.config["SETTINGS"]
-    email = str(user.get("email") or "").strip().lower()
-
-    if email and email in settings.admin_emails:
-        return True
-
-    app_meta = user.get("app_metadata") or {}
-    if not isinstance(app_meta, dict):
-        app_meta = {}
-
-    role = str(app_meta.get("role") or "").strip().lower()
-    if role in {"admin", "superadmin"}:
-        return True
-
-    return bool(app_meta.get("is_admin"))
-
-
-def _require_admin():
-    user, auth_error = _require_user()
-    if auth_error:
-        return None, auth_error
-
-    if not _is_admin_user(user):
-        return None, (jsonify({"error": "Admin access required"}), 403)
-
-    return user, None
-
-
-class SupabaseAdminError(RuntimeError):
-    def __init__(self, status: int, message: str):
-        super().__init__(message)
-        self.status = status
-        self.message = message
-
-
-def _supabase_admin_request(
-    method: str,
-    path: str,
-    query: dict[str, object] | None = None,
-    payload: dict | None = None,
-):
-    supabase_url, service_role_key = _admin_auth_config()
-    if not supabase_url or not service_role_key:
-        raise RuntimeError(
-            "Supabase admin is not configured. Set SUPABASE_SERVICE_ROLE_KEY in backend env."
-        )
-
-    url = urlparse.urljoin(supabase_url.rstrip("/") + "/", path.lstrip("/"))
-    if query:
-        q = {
-            k: str(v)
-            for k, v in query.items()
-            if v is not None and str(v).strip() != ""
-        }
-        if q:
-            url += "?" + urlparse.urlencode(q)
-
-    data = None
-    if payload is not None:
-        data = json.dumps(payload).encode("utf-8")
-
-    req = urlrequest.Request(
-        url,
-        method=method,
-        data=data,
-        headers={
-            "apikey": service_role_key,
-            "Authorization": f"Bearer {service_role_key}",
-            "Content-Type": "application/json",
-        },
-    )
-
-    try:
-        with urlrequest.urlopen(req, timeout=10) as resp:
-            raw = resp.read().decode("utf-8").strip()
-            if not raw:
-                return {}
-            return json.loads(raw)
-    except urlerror.HTTPError as e:
-        raw = e.read().decode("utf-8", errors="ignore")
-        message = f"Supabase admin request failed ({e.code})."
-        if raw:
-            try:
-                parsed = json.loads(raw)
-                message = (
-                    parsed.get("msg")
-                    or parsed.get("error_description")
-                    or parsed.get("message")
-                    or parsed.get("error")
-                    or message
-                )
-            except Exception:
-                message = raw
-        raise SupabaseAdminError(e.code, message)
-
-
 _PLAN_ALIASES: dict[str, str] = {
     "premium": "premium",
     "plan_premium": "premium",
@@ -236,51 +135,6 @@ def _plan_from_user(user: dict) -> str:
         if key in meta:
             return _normalize_plan(meta[key])
     return "basico"
-
-
-def _device_counts_by_owner() -> dict[str, int]:
-    with get_con(_db_path()) as con:
-        rows = con.execute(
-            """
-            SELECT owner_user_id, COUNT(*) AS device_count
-            FROM devices
-            WHERE owner_user_id IS NOT NULL AND owner_user_id <> ''
-            GROUP BY owner_user_id
-            """
-        ).fetchall()
-    return {str(r["owner_user_id"]): int(r["device_count"] or 0) for r in rows}
-
-
-def _serialize_admin_user(raw_user: dict, device_counts: dict[str, int]) -> dict:
-    user_meta = raw_user.get("user_metadata") or {}
-    if not isinstance(user_meta, dict):
-        user_meta = {}
-
-    app_meta = raw_user.get("app_metadata") or {}
-    if not isinstance(app_meta, dict):
-        app_meta = {}
-
-    user_id = str(raw_user.get("id") or "")
-    role = str(app_meta.get("role") or "user").strip().lower() or "user"
-    is_admin = role in {"admin", "superadmin"} or bool(app_meta.get("is_admin"))
-
-    return {
-        "id": user_id,
-        "email": str(raw_user.get("email") or ""),
-        "created_at": raw_user.get("created_at"),
-        "last_sign_in_at": raw_user.get("last_sign_in_at"),
-        "email_confirmed_at": raw_user.get("email_confirmed_at"),
-        "full_name": (
-            user_meta.get("full_name")
-            or user_meta.get("name")
-            or f"{user_meta.get('first_name', '')} {user_meta.get('last_name', '')}".strip()
-            or None
-        ),
-        "plan": _plan_from_user({"user_metadata": user_meta}),
-        "role": role,
-        "is_admin": is_admin,
-        "device_count": int(device_counts.get(user_id, 0)),
-    }
 
 @web_bp.get("/")
 def home():
