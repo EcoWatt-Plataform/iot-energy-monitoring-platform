@@ -265,6 +265,10 @@ export default function Header() {
 
   const userLabel =
     user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || "Cuenta";
+  const canAccessAdmin =
+    user?.app_metadata?.role === "admin" ||
+    user?.app_metadata?.role === "superadmin" ||
+    user?.app_metadata?.is_admin === true;
 
   const logout = async () => {
     setIsAuthBusy(true);
@@ -381,6 +385,11 @@ export default function Header() {
             <span style={userBadgeStyle} title={String(userLabel)}>
               {String(userLabel)}
             </span>
+            {canAccessAdmin && (
+              <Link href="/admin" style={rightBtnStyle}>
+                Admin
+              </Link>
+            )}
             <Link href="/dashboard" style={rightBtnStyle}>
               Dashboard
             </Link>
@@ -443,6 +452,15 @@ export default function Header() {
                 >
                   {String(userLabel)}
                 </span>
+                {canAccessAdmin && (
+                  <Link
+                    href="/admin"
+                    style={mobileActionBtnStyle}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Ir al panel admin
+                  </Link>
+                )}
                 <Link
                   href="/dashboard"
                   style={mobileActionBtnStyle}
