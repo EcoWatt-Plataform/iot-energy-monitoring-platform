@@ -127,8 +127,17 @@ Esperar propagación (`dig ecowatt.ar +short`).
 
 ## 7) HTTPS con Let's Encrypt
 
+La configuración de Nginx incluida en `deploy/ecowatt.ar/nginx-ecowatt.conf` ya fuerza redirección `http -> https` y espera certificados en:
+
+- `/etc/letsencrypt/live/ecowatt.ar/fullchain.pem`
+- `/etc/letsencrypt/live/ecowatt.ar/privkey.pem`
+
+Emití/renová los certificados con:
+
 ```bash
-sudo certbot --nginx -d ecowatt.ar -d www.ecowatt.ar --redirect -m tu-email@dominio.com --agree-tos -n
+sudo certbot certonly --nginx -d ecowatt.ar -d www.ecowatt.ar -m tu-email@dominio.com --agree-tos -n
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
 Chequeo renovación automática:
