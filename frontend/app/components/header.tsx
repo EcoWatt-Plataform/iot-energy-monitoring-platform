@@ -22,6 +22,7 @@ export default function Header() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [isAuthBusy, setIsAuthBusy] = useState(false);
+  const [isAdminFromServer, setIsAdminFromServer] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!isHome) {
@@ -113,6 +114,45 @@ export default function Header() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const checkAdminFromServer = async () => {
+      try {
+        if (!user) {
+          if (!isCancelled) setIsAdminFromServer(false);
+          return;
+        }
+
+        const supabase = createClient();
+        const { data, error } = await supabase.auth.getSession();
+
+        if (error || !data?.session?.access_token) {
+          if (!isCancelled) setIsAdminFromServer(false);
+          return;
+        }
+
+        const response = await fetch("/api/v1/admin/me", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${data.session.access_token}`,
+          },
+        });
+
+        if (!isCancelled) setIsAdminFromServer(response.ok);
+      } catch (e) {
+        console.error("Failed to check admin status from server", e);
+        if (!isCancelled) setIsAdminFromServer(false);
+      }
+    };
+
+    checkAdminFromServer();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [user]);
 
   const shouldShowWhiteBar = !isHome || isHovered || isScrolled;
   const textColor = shouldShowWhiteBar ? "#111827" : "#ffffff";
@@ -265,10 +305,7 @@ export default function Header() {
 
   const userLabel =
     user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || "Cuenta";
-  const canAccessAdmin =
-    user?.app_metadata?.role === "admin" ||
-    user?.app_metadata?.role === "superadmin" ||
-    user?.app_metadata?.is_admin === true;
+  const canAccessAdmin = isAdminFromServer === true;
 
   const logout = async () => {
     setIsAuthBusy(true);

@@ -57,10 +57,7 @@ class Settings:
                 "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY)."
             )
 
-        supabase_service_role_key = (
-            os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-            or frontend_env.get("SUPABASE_SERVICE_ROLE_KEY", "")
-        )
+        supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 
         raw_admin_emails = os.getenv("ADMIN_EMAILS", "")
         admin_emails = tuple(
