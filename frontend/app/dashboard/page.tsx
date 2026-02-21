@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -83,7 +83,7 @@ type SummaryResponse = {
 };
 
 const PLAN_LABELS: Record<Plan, string> = {
-  basico: "Basico",
+  basico: "Básico",
   avanzado: "Avanzado",
   premium: "Premium",
 };
@@ -155,7 +155,7 @@ function monthDateRange(month: string) {
   const m = Number(mRaw);
 
   if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12) {
-    throw new Error("Mes invalido. Usa formato YYYY-MM.");
+    throw new Error("Mes inválido. Usa formato YYYY-MM.");
   }
 
   const lastDay = new Date(y, m, 0).getDate();
@@ -353,8 +353,13 @@ export default function DashboardPage() {
         textarea.style.left = "-9999px";
         document.body.appendChild(textarea);
         textarea.select();
-        document.execCommand("copy");
+        const success = document.execCommand("copy");
         textarea.remove();
+        if (!success) {
+          throw new Error(
+            "Tu navegador no permite el copiado automático al portapapeles. Copia el token manualmente desde la interfaz."
+          );
+        }
       }
 
       setTokenCopyMessage("Token copiado al portapapeles.");

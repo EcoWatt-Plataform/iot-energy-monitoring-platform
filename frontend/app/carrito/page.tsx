@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 type PlanId = "basico" | "avanzado" | "premium";
 type ItemId = PlanId | "dispositivo";
@@ -339,9 +340,9 @@ export default function CarritoPage() {
               <span>{money(totalParcial)}</span>
             </div>
 
-            <a href="/checkout" style={primaryLinkBtn}>
+            <Link href="/checkout" style={primaryLinkBtn}>
               Continuar
-            </a>
+            </Link>
           </div>
         </div>
       )}
