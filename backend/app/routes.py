@@ -373,6 +373,16 @@ def home():
 def health():
     return {"ok": True, "time": datetime.utcnow().isoformat() + "Z"}
 
+
+@api_bp.get("/health")
+def api_health():
+    return jsonify({
+        "ok": True,
+        "service": "api",
+        "version": "v1",
+        "time": datetime.utcnow().isoformat() + "Z",
+    })
+
 # ---------------------------
 # ADMIN (Supabase users)
 # ---------------------------
