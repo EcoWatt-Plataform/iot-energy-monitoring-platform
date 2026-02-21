@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Chart as ChartJS,
   type ChartData,
@@ -250,6 +251,11 @@ function fadeUp(delayMs = 0): React.CSSProperties {
 
 export default function DashboardPage() {
   const supabase = useMemo(() => createClient(), []);
+  const searchParams = useSearchParams();
+  const asUserId = useMemo(() => {
+    const raw = (searchParams.get("as_user_id") || "").trim();
+    return raw || null;
+  }, [searchParams]);
 
   const [plan, setPlan] = useState<Plan>("basico");
   const [planLoading, setPlanLoading] = useState(true);
@@ -378,8 +384,11 @@ export default function DashboardPage() {
     const token = await getAccessToken();
     const headers = new Headers(init.headers ?? {});
     headers.set("Authorization", `Bearer ${token}`);
+    const scopedUrl = asUserId
+      ? `${url}${url.includes("?") ? "&" : "?"}as_user_id=${encodeURIComponent(asUserId)}`
+      : url;
 
-    return fetch(url, {
+    return fetch(scopedUrl, {
       ...init,
       headers,
     });
@@ -1072,6 +1081,25 @@ export default function DashboardPage() {
       <p style={{ color: "#666", marginTop: 0, ...fadeUp(40) }}>
         Plan activo: {planLoading ? "Cargando..." : PLAN_LABELS[plan]}
       </p>
+      {asUserId && (
+        <div
+          style={{
+            marginTop: "10px",
+            marginBottom: "12px",
+            border: "1px solid #cbd5e1",
+            background: "#f8fafc",
+            color: "#0f172a",
+            borderRadius: "10px",
+            padding: "10px 12px",
+            fontSize: "13px",
+          }}
+        >
+          Modo admin: viendo dashboard del usuario <code>{asUserId}</code>.{" "}
+          <a href="/dashboard" style={{ color: "#0f172a", fontWeight: 700 }}>
+            Volver a mi dashboard
+          </a>
+        </div>
+      )}
 
       {/* Filtros */}
       <div
