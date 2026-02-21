@@ -145,6 +145,172 @@ def health():
     return {"ok": True, "time": datetime.utcnow().isoformat() + "Z"}
 
 # ---------------------------
+# ADMIN (Supabase users)
+# ---------------------------
+@api_bp.get("/admin/me")
+def admin_me():
+    user, auth_error = _require_admin()
+    if auth_error:
+        return auth_error
+
+    return jsonify({
+        "id": user.get("id"),
+        "email": user.get("email"),
+        "is_admin": True,
+    })
+
+
+@api_bp.get("/admin/users")
+def admin_list_users():
+    _, auth_error = _require_admin()
+    if auth_error:
+        return auth_error
+
+    page = request.args.get("page", default=1, type=int) or 1
+    per_page = request.args.get("per_page", default=100, type=int) or 100
+    search = (request.args.get("search") or "").strip().lower()
+
+    page = max(1, page)
+    per_page = min(200, max(1, per_page))
+
+    try:
+        payload = _supabase_admin_request(
+            "GET",
+            "auth/v1/admin/users",
+            query={"page": page, "per_page": per_page},
+        )
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 500
+    except SupabaseAdminError as e:
+        return jsonify({"error": e.message}), e.status
+
+    users = payload.get("users")
+    if not isinstance(users, list):
+        users = []
+
+    device_counts = _device_counts_by_owner()
+    out = [
+        _serialize_admin_user(raw, device_counts)
+        for raw in users
+        if isinstance(raw, dict)
+    ]
+
+    if search:
+        out = [
+            u for u in out
+            if search in str(u.get("email", "")).lower()
+            or search in str(u.get("full_name", "")).lower()
+            or search in str(u.get("id", "")).lower()
+        ]
+
+    return jsonify({
+        "users": out,
+        "page": page,
+        "per_page": per_page,
+        "total": payload.get("total", len(out)),
+    })
+
+
+@api_bp.patch("/admin/users/<user_id>")
+def admin_update_user(user_id: str):
+    _, auth_error = _require_admin()
+    if auth_error:
+        return auth_error
+
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "invalid JSON payload"}), 400
+
+    plan = data.get("plan")
+    role = data.get("role")
+
+    if plan is None and role is None:
+        return jsonify({"error": "provide at least one field: plan, role"}), 400
+
+    if plan is not None:
+        normalized_plan = _normalize_plan(plan)
+        plan = normalized_plan
+
+    if role is not None:
+        role = str(role).strip().lower()
+        if role not in {"user", "admin"}:
+            return jsonify({"error": "role must be 'user' or 'admin'"}), 400
+
+    try:
+        current_payload = _supabase_admin_request("GET", f"auth/v1/admin/users/{user_id}")
+        current_user = current_payload.get("user")
+        if not isinstance(current_user, dict):
+            return jsonify({"error": "user not found"}), 404
+
+        user_meta = current_user.get("user_metadata") or {}
+        if not isinstance(user_meta, dict):
+            user_meta = {}
+        app_meta = current_user.get("app_metadata") or {}
+        if not isinstance(app_meta, dict):
+            app_meta = {}
+
+        if plan is not None:
+            user_meta["plan"] = plan
+
+        if role is not None:
+            if role == "admin":
+                app_meta["role"] = "admin"
+                app_meta["is_admin"] = True
+            else:
+                app_meta["role"] = "user"
+                app_meta["is_admin"] = False
+
+        updated_payload = _supabase_admin_request(
+            "PUT",
+            f"auth/v1/admin/users/{user_id}",
+            payload={
+                "user_metadata": user_meta,
+                "app_metadata": app_meta,
+            },
+        )
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 500
+    except SupabaseAdminError as e:
+        return jsonify({"error": e.message}), e.status
+
+    updated_user = updated_payload.get("user")
+    if not isinstance(updated_user, dict):
+        return jsonify({"error": "unexpected admin response"}), 502
+
+    device_counts = _device_counts_by_owner()
+    return jsonify(_serialize_admin_user(updated_user, device_counts))
+
+
+@api_bp.delete("/admin/users/<user_id>")
+def admin_delete_user(user_id: str):
+    actor, auth_error = _require_admin()
+    if auth_error:
+        return auth_error
+
+    if str(actor.get("id")) == str(user_id):
+        return jsonify({"error": "you cannot delete your own admin account"}), 400
+
+    try:
+        _supabase_admin_request("DELETE", f"auth/v1/admin/users/{user_id}")
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 500
+    except SupabaseAdminError as e:
+        return jsonify({"error": e.message}), e.status
+
+    with get_con(_db_path()) as con:
+        con.execute(
+            """
+            UPDATE devices
+            SET owner_user_id = NULL,
+                owner_email = NULL
+            WHERE owner_user_id = ?
+            """,
+            (user_id,),
+        )
+
+    return jsonify({"ok": True, "deleted_user_id": user_id})
+
+# ---------------------------
 # DEVICES
 # ---------------------------
 @api_bp.post("/devices")
