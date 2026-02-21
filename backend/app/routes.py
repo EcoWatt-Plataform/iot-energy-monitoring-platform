@@ -1174,6 +1174,11 @@ def export_measurements_csv():
     if owner_error:
         return owner_error
 
+    # When acting as another user (impersonation), do not allow CSV export to avoid
+    # bypassing the target user's plan-based feature gating.
+    if owner_user_id != user["id"]:
+        return jsonify({"error": "CSV export is not allowed when impersonating another user"}), 403
+
     if _plan_from_user(user) != "premium":
         return jsonify({"error": "CSV export requires a Premium plan"}), 403
 
@@ -1277,6 +1282,11 @@ def export_daily_csv():
     if owner_error:
         return owner_error
 
+    # When acting as another user (impersonation), do not allow CSV export to avoid
+    # bypassing the target user's plan-based feature gating.
+    if owner_user_id != user["id"]:
+        return jsonify({"error": "CSV export is not allowed when impersonating another user"}), 403
+
     if _plan_from_user(user) != "premium":
         return jsonify({"error": "CSV export requires a Premium plan"}), 403
 
@@ -1368,6 +1378,11 @@ def export_alerts_csv():
     owner_user_id, owner_error = _resolve_owner_user_id(user)
     if owner_error:
         return owner_error
+
+    # When acting as another user (impersonation), do not allow CSV export to avoid
+    # bypassing the target user's plan-based feature gating.
+    if owner_user_id != user["id"]:
+        return jsonify({"error": "CSV export is not allowed when impersonating another user"}), 403
 
     if _plan_from_user(user) != "premium":
         return jsonify({"error": "CSV export requires a Premium plan"}), 403

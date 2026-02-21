@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import {
   Chart as ChartJS,
   type ChartData,
@@ -1058,7 +1059,10 @@ export default function DashboardPage() {
 
   // Alertas según plan
   const canSeeAlerts = plan !== "basico";
-  const canDownload = plan === "premium";
+  // In admin view, disable plan-based download gating since the displayed plan is
+  // the admin's own plan, not the impersonated user's. Exports are also blocked
+  // on the backend when acting as another user.
+  const canDownload = plan === "premium" && !asUserId;
   const alerts = summary?.alerts || [];
   const summaryDevices = summary?.devices || [];
 
@@ -1079,7 +1083,7 @@ export default function DashboardPage() {
       <main style={dashboardContentStyle} className="dashboard-main">
       <h1 style={{ fontSize: "34px", marginBottom: "6px", ...fadeUp(0) }}>Dashboard</h1>
       <p style={{ color: "#666", marginTop: 0, ...fadeUp(40) }}>
-        Plan activo: {planLoading ? "Cargando..." : PLAN_LABELS[plan]}
+        Plan activo: {planLoading ? "Cargando..." : PLAN_LABELS[plan]}{asUserId ? " (admin)" : ""}
       </p>
       {asUserId && (
         <div
@@ -1095,9 +1099,9 @@ export default function DashboardPage() {
           }}
         >
           Modo admin: viendo dashboard del usuario <code>{asUserId}</code>.{" "}
-          <a href="/dashboard" style={{ color: "#0f172a", fontWeight: 700 }}>
+          <Link href="/dashboard" style={{ color: "#0f172a", fontWeight: 700 }}>
             Volver a mi dashboard
-          </a>
+          </Link>
         </div>
       )}
 
