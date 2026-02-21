@@ -144,9 +144,9 @@ export default function AdminPage() {
 
   async function getAccessToken() {
     const { data, error } = await supabase.auth.getSession();
-    if (error) throw new Error(error.message || "No se pudo validar la sesion.");
+    if (error) throw new Error(error.message || "No se pudo validar la sesión.");
     const token = data.session?.access_token;
-    if (!token) throw new Error("Sesion vencida. Inicia sesion de nuevo.");
+    if (!token) throw new Error("Sesión vencida. Iniciá sesión de nuevo.");
     return token;
   }
 
@@ -361,7 +361,7 @@ export default function AdminPage() {
 
   async function deleteUser(userId: string, email: string) {
     const confirmed = window.confirm(
-      `Eliminar la cuenta ${email}? Esta accion no se puede deshacer.`
+      `¿Eliminar la cuenta ${email}? Esta acción no se puede deshacer.`
     );
     if (!confirmed) return;
 
@@ -524,7 +524,7 @@ export default function AdminPage() {
         <div>
           <h1 style={{ margin: 0, fontSize: "32px" }}>Panel Admin</h1>
           <p style={{ margin: "8px 0 0", color: "#4b5563" }}>
-            Gestiona las cuentas registradas en la plataforma.
+            Gestioná las cuentas registradas en la plataforma.
           </p>
         </div>
 
@@ -533,7 +533,7 @@ export default function AdminPage() {
             {refreshing ? "Actualizando..." : "Refrescar"}
           </button>
           <button type="button" onClick={logout} style={ghostBtnStyle}>
-            Cerrar sesion
+            Cerrar sesión
           </button>
         </div>
       </div>
