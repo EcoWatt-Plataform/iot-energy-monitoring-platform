@@ -1,6 +1,8 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import {
   Chart as ChartJS,
   type ChartData,
@@ -250,6 +252,11 @@ function fadeUp(delayMs = 0): React.CSSProperties {
 
 export default function DashboardPage() {
   const supabase = useMemo(() => createClient(), []);
+  const searchParams = useSearchParams();
+  const asUserId = useMemo(() => {
+    const raw = (searchParams.get("as_user_id") || "").trim();
+    return raw || null;
+  }, [searchParams]);
 
   const [plan, setPlan] = useState<Plan>("basico");
   const [planLoading, setPlanLoading] = useState(true);
@@ -378,8 +385,11 @@ export default function DashboardPage() {
     const token = await getAccessToken();
     const headers = new Headers(init.headers ?? {});
     headers.set("Authorization", `Bearer ${token}`);
+    const scopedUrl = asUserId
+      ? `${url}${url.includes("?") ? "&" : "?"}as_user_id=${encodeURIComponent(asUserId)}`
+      : url;
 
-    return fetch(url, {
+    return fetch(scopedUrl, {
       ...init,
       headers,
     });
@@ -1049,7 +1059,10 @@ export default function DashboardPage() {
 
   // Alertas según plan
   const canSeeAlerts = plan !== "basico";
-  const canDownload = plan === "premium";
+  // In admin view, disable plan-based download gating since the displayed plan is
+  // the admin's own plan, not the impersonated user's. Exports are also blocked
+  // on the backend when acting as another user.
+  const canDownload = plan === "premium" && !asUserId;
   const alerts = summary?.alerts || [];
   const summaryDevices = summary?.devices || [];
 
@@ -1070,8 +1083,27 @@ export default function DashboardPage() {
       <main style={dashboardContentStyle} className="dashboard-main">
       <h1 style={{ fontSize: "34px", marginBottom: "6px", ...fadeUp(0) }}>Dashboard</h1>
       <p style={{ color: "#666", marginTop: 0, ...fadeUp(40) }}>
-        Plan activo: {planLoading ? "Cargando..." : PLAN_LABELS[plan]}
+        Plan activo: {planLoading ? "Cargando..." : PLAN_LABELS[plan]}{asUserId ? " (admin)" : ""}
       </p>
+      {asUserId && (
+        <div
+          style={{
+            marginTop: "10px",
+            marginBottom: "12px",
+            border: "1px solid #cbd5e1",
+            background: "#f8fafc",
+            color: "#0f172a",
+            borderRadius: "10px",
+            padding: "10px 12px",
+            fontSize: "13px",
+          }}
+        >
+          Modo admin: viendo dashboard del usuario <code>{asUserId}</code>.{" "}
+          <Link href="/dashboard" style={{ color: "#0f172a", fontWeight: 700 }}>
+            Volver a mi dashboard
+          </Link>
+        </div>
+      )}
 
       {/* Filtros */}
       <div

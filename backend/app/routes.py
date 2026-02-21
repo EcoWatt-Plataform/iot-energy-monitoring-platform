@@ -210,6 +210,31 @@ def _supabase_admin_request(
         raise SupabaseAdminError(e.code, message)
 
 
+def _extract_supabase_admin_user(payload: object) -> dict | None:
+    if not isinstance(payload, dict):
+        return None
+
+    nested = payload.get("user")
+    if isinstance(nested, dict):
+        return nested
+
+    if isinstance(payload.get("id"), str):
+        return payload
+
+    return None
+
+
+def _resolve_owner_user_id(actor_user: dict):
+    requested_user_id = str(request.args.get("as_user_id") or "").strip()
+    if not requested_user_id:
+        return str(actor_user.get("id") or ""), None
+
+    if not _is_admin_user(actor_user):
+        return None, (jsonify({"error": "Admin access required for as_user_id"}), 403)
+
+    return requested_user_id, None
+
+
 _PLAN_ALIASES: dict[str, str] = {
     "premium": "premium",
     "plan_premium": "premium",
@@ -225,6 +250,46 @@ def _normalize_plan(value: object) -> str:
     """Return canonical plan name from a raw metadata value."""
     raw = str(value or "").strip().lower()
     return _PLAN_ALIASES.get(raw, "basico")
+
+
+def _normalize_role(value: object) -> str:
+    raw = str(value or "").strip().lower()
+    return "admin" if raw in {"admin", "superadmin"} else "user"
+
+
+def _is_valid_email(value: str) -> bool:
+    if " " in value or "@" not in value:
+        return False
+    _, _, domain = value.partition("@")
+    return "." in domain
+
+
+def _clean_optional_text(value: object) -> str | None:
+    text = str(value or "").strip()
+    return text or None
+
+
+def _normalize_document_type(value: object) -> str | None:
+    raw = str(value or "").strip().upper()
+    if raw in {"DNI", "CUIT"}:
+        return raw
+    return None
+
+
+def _address_from_user_meta(user_meta: dict) -> str | None:
+    parts: list[str] = []
+    explicit = _clean_optional_text(user_meta.get("address"))
+    if explicit:
+        parts.append(explicit)
+
+    for key in ("locality", "province", "country"):
+        value = _clean_optional_text(user_meta.get(key))
+        if value and value not in parts:
+            parts.append(value)
+
+    if not parts:
+        return None
+    return ", ".join(parts)
 
 
 def _plan_from_user(user: dict) -> str:
@@ -261,8 +326,16 @@ def _serialize_admin_user(raw_user: dict, device_counts: dict[str, int]) -> dict
         app_meta = {}
 
     user_id = str(raw_user.get("id") or "")
-    role = str(app_meta.get("role") or "user").strip().lower() or "user"
-    is_admin = role in {"admin", "superadmin"} or bool(app_meta.get("is_admin"))
+    role = _normalize_role(app_meta.get("role"))
+    is_admin = role == "admin" or bool(app_meta.get("is_admin"))
+    document_type = _normalize_document_type(user_meta.get("document_type"))
+    document_number = _clean_optional_text(user_meta.get("document_number"))
+    phone = _clean_optional_text(user_meta.get("phone"))
+    birth_date = _clean_optional_text(user_meta.get("birth_date"))
+    locality = _clean_optional_text(user_meta.get("locality"))
+    province = _clean_optional_text(user_meta.get("province"))
+    country = _clean_optional_text(user_meta.get("country"))
+    address = _address_from_user_meta(user_meta)
 
     return {
         "id": user_id,
@@ -280,6 +353,16 @@ def _serialize_admin_user(raw_user: dict, device_counts: dict[str, int]) -> dict
         "role": role,
         "is_admin": is_admin,
         "device_count": int(device_counts.get(user_id, 0)),
+        "document_type": document_type,
+        "document_number": document_number,
+        "dni": document_number if document_type == "DNI" else None,
+        "cuit": document_number if document_type == "CUIT" else None,
+        "phone": phone,
+        "birth_date": birth_date,
+        "locality": locality,
+        "province": province,
+        "country": country,
+        "address": address,
     }
 
 @web_bp.get("/")
@@ -347,6 +430,10 @@ def admin_list_users():
             if search in str(u.get("email", "")).lower()
             or search in str(u.get("full_name", "")).lower()
             or search in str(u.get("id", "")).lower()
+            or search in str(u.get("document_number", "")).lower()
+            or search in str(u.get("dni", "")).lower()
+            or search in str(u.get("cuit", "")).lower()
+            or search in str(u.get("phone", "")).lower()
         ]
 
     return jsonify({
@@ -355,6 +442,92 @@ def admin_list_users():
         "per_page": per_page,
         "total": payload.get("total", len(out)),
     })
+
+
+@api_bp.post("/admin/users")
+def admin_create_user():
+    _, auth_error = _require_admin()
+    if auth_error:
+        return auth_error
+
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "invalid JSON payload"}), 400
+
+    email = str(data.get("email") or "").strip().lower()
+    if not email or not _is_valid_email(email):
+        return jsonify({"error": "valid email is required"}), 400
+
+    password = str(data.get("password") or "")
+    if len(password) < 6:
+        return jsonify({"error": "password must have at least 6 characters"}), 400
+
+    full_name = data.get("full_name")
+    if full_name is not None:
+        full_name = str(full_name).strip() or None
+
+    document_type = _normalize_document_type(data.get("document_type"))
+    document_number = _clean_optional_text(data.get("document_number"))
+    phone = _clean_optional_text(data.get("phone"))
+    birth_date = _clean_optional_text(data.get("birth_date"))
+    locality = _clean_optional_text(data.get("locality"))
+    province = _clean_optional_text(data.get("province"))
+    country = _clean_optional_text(data.get("country"))
+    address = _clean_optional_text(data.get("address"))
+
+    if "document_type" in data and document_type is None and _clean_optional_text(data.get("document_type")):
+        return jsonify({"error": "document_type must be 'DNI' or 'CUIT'"}), 400
+
+    plan = _normalize_plan(data.get("plan"))
+    role = _normalize_role(data.get("role"))
+    email_confirm = bool(data.get("email_confirm", True))
+
+    user_meta: dict[str, object] = {"plan": plan}
+    if full_name:
+        user_meta["full_name"] = full_name
+        user_meta["name"] = full_name
+    if document_type:
+        user_meta["document_type"] = document_type
+    if document_number:
+        user_meta["document_number"] = document_number
+    if phone:
+        user_meta["phone"] = phone
+    if birth_date:
+        user_meta["birth_date"] = birth_date
+    if locality:
+        user_meta["locality"] = locality
+    if province:
+        user_meta["province"] = province
+    if country:
+        user_meta["country"] = country
+    if address:
+        user_meta["address"] = address
+
+    app_meta = {"role": role, "is_admin": role == "admin"}
+
+    try:
+        created_payload = _supabase_admin_request(
+            "POST",
+            "auth/v1/admin/users",
+            payload={
+                "email": email,
+                "password": password,
+                "email_confirm": email_confirm,
+                "user_metadata": user_meta,
+                "app_metadata": app_meta,
+            },
+        )
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 500
+    except SupabaseAdminError as e:
+        return jsonify({"error": e.message}), e.status
+
+    created_user = _extract_supabase_admin_user(created_payload)
+    if not isinstance(created_user, dict):
+        return jsonify({"error": "unexpected admin response"}), 502
+
+    device_counts = _device_counts_by_owner()
+    return jsonify(_serialize_admin_user(created_user, device_counts)), 201
 
 
 @api_bp.patch("/admin/users/<user_id>")
@@ -369,22 +542,74 @@ def admin_update_user(user_id: str):
 
     plan = data.get("plan")
     role = data.get("role")
+    full_name = data.get("full_name")
+    email = data.get("email")
+    password = data.get("password")
+    has_document_type = "document_type" in data
+    document_type = _normalize_document_type(data.get("document_type"))
+    has_document_number = "document_number" in data
+    document_number = _clean_optional_text(data.get("document_number"))
+    has_phone = "phone" in data
+    phone = _clean_optional_text(data.get("phone"))
+    has_birth_date = "birth_date" in data
+    birth_date = _clean_optional_text(data.get("birth_date"))
+    has_locality = "locality" in data
+    locality = _clean_optional_text(data.get("locality"))
+    has_province = "province" in data
+    province = _clean_optional_text(data.get("province"))
+    has_country = "country" in data
+    country = _clean_optional_text(data.get("country"))
+    has_address = "address" in data
+    address = _clean_optional_text(data.get("address"))
 
-    if plan is None and role is None:
-        return jsonify({"error": "provide at least one field: plan, role"}), 400
+    if (
+        plan is None
+        and role is None
+        and full_name is None
+        and email is None
+        and password is None
+        and not has_document_type
+        and not has_document_number
+        and not has_phone
+        and not has_birth_date
+        and not has_locality
+        and not has_province
+        and not has_country
+        and not has_address
+    ):
+        return jsonify({
+            "error": (
+                "provide at least one field: plan, role, full_name, email, password, "
+                "document_type, document_number, phone, birth_date, locality, province, country, address"
+            )
+        }), 400
 
     if plan is not None:
         normalized_plan = _normalize_plan(plan)
         plan = normalized_plan
 
     if role is not None:
-        role = str(role).strip().lower()
-        if role not in {"user", "admin"}:
-            return jsonify({"error": "role must be 'user' or 'admin'"}), 400
+        role = _normalize_role(role)
+
+    if full_name is not None:
+        full_name = str(full_name).strip()
+
+    if email is not None:
+        email = str(email).strip().lower()
+        if not email or not _is_valid_email(email):
+            return jsonify({"error": "email must be valid"}), 400
+
+    if password is not None:
+        password = str(password)
+        if len(password) < 6:
+            return jsonify({"error": "password must have at least 6 characters"}), 400
+
+    if has_document_type and document_type is None and _clean_optional_text(data.get("document_type")):
+        return jsonify({"error": "document_type must be 'DNI' or 'CUIT'"}), 400
 
     try:
         current_payload = _supabase_admin_request("GET", f"auth/v1/admin/users/{user_id}")
-        current_user = current_payload.get("user")
+        current_user = _extract_supabase_admin_user(current_payload)
         if not isinstance(current_user, dict):
             return jsonify({"error": "user not found"}), 404
 
@@ -406,20 +631,75 @@ def admin_update_user(user_id: str):
                 app_meta["role"] = "user"
                 app_meta["is_admin"] = False
 
+        if full_name is not None:
+            if full_name:
+                user_meta["full_name"] = full_name
+                user_meta["name"] = full_name
+            else:
+                user_meta.pop("full_name", None)
+                user_meta.pop("name", None)
+
+        if has_document_type:
+            if document_type:
+                user_meta["document_type"] = document_type
+            else:
+                user_meta.pop("document_type", None)
+        if has_document_number:
+            if document_number:
+                user_meta["document_number"] = document_number
+            else:
+                user_meta.pop("document_number", None)
+        if has_phone:
+            if phone:
+                user_meta["phone"] = phone
+            else:
+                user_meta.pop("phone", None)
+        if has_birth_date:
+            if birth_date:
+                user_meta["birth_date"] = birth_date
+            else:
+                user_meta.pop("birth_date", None)
+        if has_locality:
+            if locality:
+                user_meta["locality"] = locality
+            else:
+                user_meta.pop("locality", None)
+        if has_province:
+            if province:
+                user_meta["province"] = province
+            else:
+                user_meta.pop("province", None)
+        if has_country:
+            if country:
+                user_meta["country"] = country
+            else:
+                user_meta.pop("country", None)
+        if has_address:
+            if address:
+                user_meta["address"] = address
+            else:
+                user_meta.pop("address", None)
+
+        update_payload: dict[str, object] = {
+            "user_metadata": user_meta,
+            "app_metadata": app_meta,
+        }
+        if email is not None:
+            update_payload["email"] = email
+        if password is not None:
+            update_payload["password"] = password
+
         updated_payload = _supabase_admin_request(
             "PUT",
             f"auth/v1/admin/users/{user_id}",
-            payload={
-                "user_metadata": user_meta,
-                "app_metadata": app_meta,
-            },
+            payload=update_payload,
         )
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 500
     except SupabaseAdminError as e:
         return jsonify({"error": e.message}), e.status
 
-    updated_user = updated_payload.get("user")
+    updated_user = _extract_supabase_admin_user(updated_payload)
     if not isinstance(updated_user, dict):
         return jsonify({"error": "unexpected admin response"}), 502
 
@@ -505,6 +785,10 @@ def list_devices():
     if auth_error:
         return auth_error
 
+    owner_user_id, owner_error = _resolve_owner_user_id(user)
+    if owner_error:
+        return owner_error
+
     with get_con(_db_path()) as con:
         rows = con.execute(
             """
@@ -513,7 +797,7 @@ def list_devices():
             WHERE owner_user_id = ?
             ORDER BY id
             """,
-            (user["id"],),
+            (owner_user_id,),
         ).fetchall()
 
     return jsonify([dict(r) for r in rows])
@@ -671,6 +955,10 @@ def summary_month():
     if auth_error:
         return auth_error
 
+    owner_user_id, owner_error = _resolve_owner_user_id(user)
+    if owner_error:
+        return owner_error
+
     month = (request.args.get("month") or "").strip()
     if not month or len(month) != 7:
         return jsonify({"error": "month must be YYYY-MM"}), 400
@@ -696,7 +984,7 @@ def summary_month():
         WHERE d.owner_user_id = ?
     """
 
-    params = [month, user["id"]]
+    params = [month, owner_user_id]
 
     if device_id is not None:
         base_sql += "\nAND d.id = ?"
@@ -805,6 +1093,10 @@ def metrics_daily():
     if auth_error:
         return auth_error
 
+    owner_user_id, owner_error = _resolve_owner_user_id(user)
+    if owner_error:
+        return owner_error
+
     device_id = request.args.get("device_id", type=int)
     date_from = (request.args.get("from") or "").strip()
     date_to = (request.args.get("to") or "").strip()
@@ -819,7 +1111,7 @@ def metrics_daily():
     with get_con(_db_path()) as con:
         owns_device = con.execute(
             "SELECT 1 FROM devices WHERE id = ? AND owner_user_id = ?",
-            (device_id, user["id"]),
+            (device_id, owner_user_id),
         ).fetchone()
         if not owns_device:
             return jsonify({"error": "device not found"}), 404
@@ -878,6 +1170,15 @@ def export_measurements_csv():
     if auth_error:
         return auth_error
 
+    owner_user_id, owner_error = _resolve_owner_user_id(user)
+    if owner_error:
+        return owner_error
+
+    # When acting as another user (impersonation), do not allow CSV export to avoid
+    # bypassing the target user's plan-based feature gating.
+    if owner_user_id != user["id"]:
+        return jsonify({"error": "CSV export is not allowed when impersonating another user"}), 403
+
     if _plan_from_user(user) != "premium":
         return jsonify({"error": "CSV export requires a Premium plan"}), 403
 
@@ -917,7 +1218,7 @@ def export_measurements_csv():
                   AND m.device_id = ?
                 ORDER BY m.ts ASC
                 """,
-                (user["id"], date_from, date_to, device_id),
+                (owner_user_id, date_from, date_to, device_id),
             ).fetchall()
         else:
             rows = con.execute(
@@ -937,7 +1238,7 @@ def export_measurements_csv():
                   AND substr(m.ts, 1, 10) <= ?
                 ORDER BY m.ts ASC
                 """,
-                (user["id"], date_from, date_to),
+                (owner_user_id, date_from, date_to),
             ).fetchall()
 
     output = io.StringIO()
@@ -977,6 +1278,15 @@ def export_daily_csv():
     if auth_error:
         return auth_error
 
+    owner_user_id, owner_error = _resolve_owner_user_id(user)
+    if owner_error:
+        return owner_error
+
+    # When acting as another user (impersonation), do not allow CSV export to avoid
+    # bypassing the target user's plan-based feature gating.
+    if owner_user_id != user["id"]:
+        return jsonify({"error": "CSV export is not allowed when impersonating another user"}), 403
+
     if _plan_from_user(user) != "premium":
         return jsonify({"error": "CSV export requires a Premium plan"}), 403
 
@@ -1014,7 +1324,7 @@ def export_daily_csv():
                 GROUP BY day, m.device_id, d.name
                 ORDER BY day ASC
                 """,
-                (user["id"], date_from, date_to, device_id),
+                (owner_user_id, date_from, date_to, device_id),
             ).fetchall()
         else:
             rows = con.execute(
@@ -1032,7 +1342,7 @@ def export_daily_csv():
                 GROUP BY day, m.device_id, d.name
                 ORDER BY day ASC, m.device_id ASC
                 """,
-                (user["id"], date_from, date_to),
+                (owner_user_id, date_from, date_to),
             ).fetchall()
 
     output = io.StringIO()
@@ -1065,6 +1375,15 @@ def export_alerts_csv():
     if auth_error:
         return auth_error
 
+    owner_user_id, owner_error = _resolve_owner_user_id(user)
+    if owner_error:
+        return owner_error
+
+    # When acting as another user (impersonation), do not allow CSV export to avoid
+    # bypassing the target user's plan-based feature gating.
+    if owner_user_id != user["id"]:
+        return jsonify({"error": "CSV export is not allowed when impersonating another user"}), 403
+
     if _plan_from_user(user) != "premium":
         return jsonify({"error": "CSV export requires a Premium plan"}), 403
 
@@ -1094,7 +1413,7 @@ def export_alerts_csv():
                 HAVING COALESCE(SUM(m.energy_wh), 0) > COALESCE(d.monthly_threshold_wh, 0)
                 ORDER BY COALESCE(SUM(m.energy_wh), 0) DESC
                 """,
-                (month, user["id"], device_id),
+                (month, owner_user_id, device_id),
             ).fetchall()
 
         else:
@@ -1114,7 +1433,7 @@ def export_alerts_csv():
                 HAVING COALESCE(SUM(m.energy_wh), 0) > COALESCE(d.monthly_threshold_wh, 0)
                 ORDER BY COALESCE(SUM(m.energy_wh), 0) DESC
                 """,
-                (month, user["id"]),
+                (month, owner_user_id),
             ).fetchall()
 
 

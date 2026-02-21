@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type Plan = "basico" | "avanzado" | "premium";
 type Role = "user" | "admin";
+type DocumentType = "DNI" | "CUIT";
+type DocumentTypeValue = DocumentType | "";
 
 type AdminUser = {
   id: string;
@@ -19,6 +21,16 @@ type AdminUser = {
   role: Role;
   is_admin: boolean;
   device_count: number;
+  document_type: DocumentType | null;
+  document_number: string | null;
+  dni: string | null;
+  cuit: string | null;
+  phone: string | null;
+  birth_date: string | null;
+  locality: string | null;
+  province: string | null;
+  country: string | null;
+  address: string | null;
 };
 
 type AdminUsersResponse = {
@@ -26,13 +38,40 @@ type AdminUsersResponse = {
   error?: string;
 };
 
+type UpdateUserPatch = Partial<{
+  plan: Plan;
+  role: Role;
+  full_name: string | null;
+  email: string;
+  password: string;
+  document_type: DocumentType | null;
+  document_number: string | null;
+  phone: string | null;
+  birth_date: string | null;
+  locality: string | null;
+  province: string | null;
+  country: string | null;
+  address: string | null;
+}>;
+
+type ProfileDraft = {
+  document_type: DocumentTypeValue;
+  document_number: string;
+  phone: string;
+  birth_date: string;
+  address: string;
+  locality: string;
+  province: string;
+  country: string;
+};
+
 const PLAN_OPTIONS: Plan[] = ["basico", "avanzado", "premium"];
 const ROLE_OPTIONS: Role[] = ["user", "admin"];
 
 function formatDate(value: string | null) {
-  if (!value) return "—";
+  if (!value) return "-";
   const dt = new Date(value);
-  if (Number.isNaN(dt.getTime())) return "—";
+  if (Number.isNaN(dt.getTime())) return "-";
   return dt.toLocaleString("es-AR", {
     day: "2-digit",
     month: "2-digit",
@@ -40,6 +79,40 @@ function formatDate(value: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatDocument(user: AdminUser) {
+  const type = user.document_type;
+  const number = user.document_number || user.dni || user.cuit;
+  if (!type && !number) return "-";
+  if (type && number) return `${type}: ${number}`;
+  return number || "-";
+}
+
+function formatAddress(user: AdminUser) {
+  if (user.address) return user.address;
+  const parts = [user.locality, user.province, user.country].filter(Boolean);
+  if (parts.length === 0) return "-";
+  return parts.join(", ");
+}
+
+function formatDateInput(value: string | null) {
+  if (!value) return "";
+  if (value.length >= 10) return value.slice(0, 10);
+  return "";
+}
+
+function buildProfileDraft(user: AdminUser): ProfileDraft {
+  return {
+    document_type: user.document_type ?? "",
+    document_number: user.document_number || user.dni || user.cuit || "",
+    phone: user.phone || "",
+    birth_date: formatDateInput(user.birth_date),
+    address: user.address || "",
+    locality: user.locality || "",
+    province: user.province || "",
+    country: user.country || "",
+  };
 }
 
 export default function AdminPage() {
@@ -52,6 +125,22 @@ export default function AdminPage() {
   const [errorText, setErrorText] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [activeAction, setActiveAction] = useState<string | null>(null);
+  const [draftNames, setDraftNames] = useState<Record<string, string>>({});
+  const [newEmail, setNewEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newFullName, setNewFullName] = useState("");
+  const [newPlan, setNewPlan] = useState<Plan>("basico");
+  const [newRole, setNewRole] = useState<Role>("user");
+  const [newDocumentType, setNewDocumentType] = useState<DocumentType>("DNI");
+  const [newDocumentNumber, setNewDocumentNumber] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newBirthDate, setNewBirthDate] = useState("");
+  const [newAddress, setNewAddress] = useState("");
+  const [newLocality, setNewLocality] = useState("");
+  const [newProvince, setNewProvince] = useState("");
+  const [newCountry, setNewCountry] = useState("");
+  const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>({});
+  const [profileDrafts, setProfileDrafts] = useState<Record<string, ProfileDraft>>({});
 
   async function getAccessToken() {
     const { data, error } = await supabase.auth.getSession();
@@ -100,7 +189,29 @@ export default function AdminPage() {
       throw new Error(payload.error || "No se pudo cargar el listado de cuentas.");
     }
 
-    setUsers(Array.isArray(payload.users) ? payload.users : []);
+    const nextUsers = Array.isArray(payload.users) ? payload.users : [];
+    setUsers(nextUsers);
+    setDraftNames((prev) => {
+      const next: Record<string, string> = {};
+      for (const user of nextUsers) {
+        next[user.id] = prev[user.id] ?? user.full_name ?? "";
+      }
+      return next;
+    });
+    setProfileDrafts((prev) => {
+      const next: Record<string, ProfileDraft> = {};
+      for (const user of nextUsers) {
+        next[user.id] = prev[user.id] ?? buildProfileDraft(user);
+      }
+      return next;
+    });
+    setExpandedUsers((prev) => {
+      const next: Record<string, boolean> = {};
+      for (const user of nextUsers) {
+        if (prev[user.id]) next[user.id] = true;
+      }
+      return next;
+    });
   }
 
   useEffect(() => {
@@ -143,7 +254,7 @@ export default function AdminPage() {
     }
   }
 
-  async function updateUser(userId: string, patch: Partial<Pick<AdminUser, "plan" | "role">>) {
+  async function updateUser(userId: string, patch: UpdateUserPatch) {
     setActiveAction(userId);
     setErrorText(null);
     try {
@@ -161,6 +272,8 @@ export default function AdminPage() {
       }
 
       setUsers((prev) => prev.map((u) => (u.id === userId ? payload : u)));
+      setDraftNames((prev) => ({ ...prev, [userId]: payload.full_name || "" }));
+      setProfileDrafts((prev) => ({ ...prev, [userId]: buildProfileDraft(payload) }));
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : "No se pudo actualizar la cuenta.";
@@ -168,6 +281,82 @@ export default function AdminPage() {
     } finally {
       setActiveAction(null);
     }
+  }
+
+  async function createUser() {
+    const email = newEmail.trim().toLowerCase();
+    const password = newPassword;
+    const fullName = newFullName.trim();
+
+    if (!email) {
+      setErrorText("El email es obligatorio para crear un usuario.");
+      return;
+    }
+    if (password.length < 6) {
+      setErrorText("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
+
+    setActiveAction("create-user");
+    setErrorText(null);
+    try {
+      const res = await adminFetch("/api/v1/admin/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          full_name: fullName || null,
+          plan: newPlan,
+          role: newRole,
+          document_type: newDocumentType,
+          document_number: newDocumentNumber.trim() || null,
+          phone: newPhone.trim() || null,
+          birth_date: newBirthDate || null,
+          address: newAddress.trim() || null,
+          locality: newLocality.trim() || null,
+          province: newProvince.trim() || null,
+          country: newCountry.trim() || null,
+        }),
+      });
+
+      const payload = (await res.json().catch(() => ({}))) as AdminUser & { error?: string };
+      if (!res.ok) {
+        throw new Error(payload.error || "No se pudo crear la cuenta.");
+      }
+
+      setUsers((prev) => [payload, ...prev]);
+      setDraftNames((prev) => ({ ...prev, [payload.id]: payload.full_name || "" }));
+      setProfileDrafts((prev) => ({ ...prev, [payload.id]: buildProfileDraft(payload) }));
+      setNewEmail("");
+      setNewPassword("");
+      setNewFullName("");
+      setNewPlan("basico");
+      setNewRole("user");
+      setNewDocumentType("DNI");
+      setNewDocumentNumber("");
+      setNewPhone("");
+      setNewBirthDate("");
+      setNewAddress("");
+      setNewLocality("");
+      setNewProvince("");
+      setNewCountry("");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "No se pudo crear la cuenta.";
+      setErrorText(message);
+    } finally {
+      setActiveAction(null);
+    }
+  }
+
+  async function saveUserName(userId: string) {
+    const fullName = (draftNames[userId] || "").trim();
+    const currentUser = users.find((u) => u.id === userId);
+    const currentName = (currentUser?.full_name || "").trim();
+    if (fullName === currentName) return;
+    await updateUser(userId, { full_name: fullName || null });
   }
 
   async function deleteUser(userId: string, email: string) {
@@ -188,6 +377,21 @@ export default function AdminPage() {
       }
 
       setUsers((prev) => prev.filter((u) => u.id !== userId));
+      setDraftNames((prev) => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+      setProfileDrafts((prev) => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+      setExpandedUsers((prev) => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : "No se pudo eliminar la cuenta.";
@@ -201,6 +405,103 @@ export default function AdminPage() {
     await supabase.auth.signOut();
     router.push("/admin/login");
     router.refresh();
+  }
+
+  function openUserDashboard(userId: string) {
+    const target = `/dashboard?as_user_id=${encodeURIComponent(userId)}`;
+    if (typeof window !== "undefined") {
+      window.open(target, "_blank", "noopener,noreferrer");
+      return;
+    }
+    router.push(target);
+  }
+
+  function toggleUserDetails(user: AdminUser) {
+    setExpandedUsers((prev) => ({ ...prev, [user.id]: !prev[user.id] }));
+    setProfileDrafts((prev) => {
+      if (prev[user.id]) return prev;
+      return { ...prev, [user.id]: buildProfileDraft(user) };
+    });
+  }
+
+  function setProfileField(userId: string, field: keyof ProfileDraft, value: string) {
+    setProfileDrafts((prev) => {
+      const current = prev[userId] ?? {
+        document_type: "",
+        document_number: "",
+        phone: "",
+        birth_date: "",
+        address: "",
+        locality: "",
+        province: "",
+        country: "",
+      };
+      return {
+        ...prev,
+        [userId]: {
+          ...current,
+          [field]: value,
+        },
+      };
+    });
+  }
+
+  async function saveUserProfile(userId: string) {
+    const user = users.find((item) => item.id === userId);
+    const draft = profileDrafts[userId];
+    if (!user || !draft) return;
+
+    const patch: UpdateUserPatch = {};
+
+    const documentType = draft.document_type || null;
+    if (documentType !== (user.document_type ?? null)) {
+      patch.document_type = documentType;
+    }
+
+    const currentDocument = (user.document_number || user.dni || user.cuit || "").trim() || null;
+    const nextDocument = draft.document_number.trim() || null;
+    if (nextDocument !== currentDocument) {
+      patch.document_number = nextDocument;
+    }
+
+    const currentPhone = (user.phone || "").trim() || null;
+    const nextPhone = draft.phone.trim() || null;
+    if (nextPhone !== currentPhone) {
+      patch.phone = nextPhone;
+    }
+
+    const currentBirthDate = formatDateInput(user.birth_date) || null;
+    const nextBirthDate = draft.birth_date || null;
+    if (nextBirthDate !== currentBirthDate) {
+      patch.birth_date = nextBirthDate;
+    }
+
+    const currentAddress = (user.address || "").trim() || null;
+    const nextAddress = draft.address.trim() || null;
+    if (nextAddress !== currentAddress) {
+      patch.address = nextAddress;
+    }
+
+    const currentLocality = (user.locality || "").trim() || null;
+    const nextLocality = draft.locality.trim() || null;
+    if (nextLocality !== currentLocality) {
+      patch.locality = nextLocality;
+    }
+
+    const currentProvince = (user.province || "").trim() || null;
+    const nextProvince = draft.province.trim() || null;
+    if (nextProvince !== currentProvince) {
+      patch.province = nextProvince;
+    }
+
+    const currentCountry = (user.country || "").trim() || null;
+    const nextCountry = draft.country.trim() || null;
+    if (nextCountry !== currentCountry) {
+      patch.country = nextCountry;
+    }
+
+    if (Object.keys(patch).length === 0) return;
+    await updateUser(userId, patch);
   }
 
   return (
@@ -267,6 +568,111 @@ export default function AdminPage() {
         </div>
       </section>
 
+      <section
+        style={{
+          marginTop: "14px",
+          border: "1px solid #e5e7eb",
+          borderRadius: "14px",
+          padding: "12px",
+          background: "white",
+        }}
+      >
+        <h2 style={{ margin: "0 0 10px", fontSize: "18px" }}>Alta de usuario</h2>
+        <div style={{ display: "grid", gap: "8px", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+          <input
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            placeholder="Email"
+            style={inputStyle}
+          />
+          <input
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="Contraseña inicial"
+            type="password"
+            style={inputStyle}
+          />
+          <input
+            value={newFullName}
+            onChange={(e) => setNewFullName(e.target.value)}
+            placeholder="Nombre completo"
+            style={inputStyle}
+          />
+          <select
+            value={newDocumentType}
+            onChange={(e) => setNewDocumentType(e.target.value as DocumentType)}
+            style={selectStyle}
+          >
+            <option value="DNI">Documento: DNI</option>
+            <option value="CUIT">Documento: CUIT</option>
+          </select>
+          <input
+            value={newDocumentNumber}
+            onChange={(e) => setNewDocumentNumber(e.target.value)}
+            placeholder="Número de documento"
+            style={inputStyle}
+          />
+          <input
+            value={newPhone}
+            onChange={(e) => setNewPhone(e.target.value)}
+            placeholder="Teléfono"
+            style={inputStyle}
+          />
+          <input
+            type="date"
+            value={newBirthDate}
+            onChange={(e) => setNewBirthDate(e.target.value)}
+            style={inputStyle}
+          />
+          <input
+            value={newAddress}
+            onChange={(e) => setNewAddress(e.target.value)}
+            placeholder="Dirección (calle/altura)"
+            style={inputStyle}
+          />
+          <input
+            value={newLocality}
+            onChange={(e) => setNewLocality(e.target.value)}
+            placeholder="Localidad"
+            style={inputStyle}
+          />
+          <input
+            value={newProvince}
+            onChange={(e) => setNewProvince(e.target.value)}
+            placeholder="Provincia"
+            style={inputStyle}
+          />
+          <input
+            value={newCountry}
+            onChange={(e) => setNewCountry(e.target.value)}
+            placeholder="País"
+            style={inputStyle}
+          />
+          <select value={newPlan} onChange={(e) => setNewPlan(e.target.value as Plan)} style={selectStyle}>
+            {PLAN_OPTIONS.map((plan) => (
+              <option key={`new-plan-${plan}`} value={plan}>
+                Plan: {plan}
+              </option>
+            ))}
+          </select>
+          <select value={newRole} onChange={(e) => setNewRole(e.target.value as Role)} style={selectStyle}>
+            {ROLE_OPTIONS.map((role) => (
+              <option key={`new-role-${role}`} value={role}>
+                Rol: {role}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={createUser}
+            disabled={activeAction === "create-user"}
+            style={primaryBtnStyle}
+          >
+            {activeAction === "create-user" ? "Creando..." : "Crear usuario"}
+          </button>
+        </div>
+      </section>
+
       {errorText && (
         <div
           style={{
@@ -297,11 +703,15 @@ export default function AdminPage() {
           <div style={{ padding: "18px", color: "#4b5563" }}>No hay cuentas para mostrar.</div>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "980px" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1540px" }}>
               <thead>
                 <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e5e7eb" }}>
+                  <Th>User ID</Th>
                   <Th>Email</Th>
                   <Th>Nombre</Th>
+                  <Th>Documento</Th>
+                  <Th>Teléfono</Th>
+                  <Th>Dirección</Th>
                   <Th>Plan</Th>
                   <Th>Rol</Th>
                   <Th>Dispositivos</Th>
@@ -313,56 +723,263 @@ export default function AdminPage() {
               <tbody>
                 {users.map((user) => {
                   const busy = activeAction === user.id;
+                  const showDetails = Boolean(expandedUsers[user.id]);
+                  const draft = profileDrafts[user.id] ?? buildProfileDraft(user);
                   return (
-                    <tr key={user.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                      <Td>{user.email || "—"}</Td>
-                      <Td>{user.full_name || "—"}</Td>
-                      <Td>
-                        <select
-                          value={user.plan}
-                          disabled={busy}
-                          onChange={(e) =>
-                            updateUser(user.id, { plan: e.target.value as Plan })
-                          }
-                          style={selectStyle}
-                        >
-                          {PLAN_OPTIONS.map((plan) => (
-                            <option key={plan} value={plan}>
-                              {plan}
-                            </option>
-                          ))}
-                        </select>
-                      </Td>
-                      <Td>
-                        <select
-                          value={user.role}
-                          disabled={busy}
-                          onChange={(e) =>
-                            updateUser(user.id, { role: e.target.value as Role })
-                          }
-                          style={selectStyle}
-                        >
-                          {ROLE_OPTIONS.map((role) => (
-                            <option key={role} value={role}>
-                              {role}
-                            </option>
-                          ))}
-                        </select>
-                      </Td>
-                      <Td>{user.device_count}</Td>
-                      <Td>{formatDate(user.created_at)}</Td>
-                      <Td>{formatDate(user.last_sign_in_at)}</Td>
-                      <Td>
-                        <button
-                          type="button"
-                          onClick={() => deleteUser(user.id, user.email)}
-                          disabled={busy}
-                          style={dangerBtnStyle}
-                        >
-                          Eliminar
-                        </button>
-                      </Td>
-                    </tr>
+                    <Fragment key={user.id}>
+                      <tr style={{ borderBottom: showDetails ? "none" : "1px solid #f1f5f9" }}>
+                        <Td>
+                          <code style={{ fontSize: "12px" }}>{user.id}</code>
+                        </Td>
+                        <Td>{user.email || "-"}</Td>
+                        <Td>
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                            <input
+                              value={draftNames[user.id] ?? ""}
+                              onChange={(e) =>
+                                setDraftNames((prev) => ({ ...prev, [user.id]: e.target.value }))
+                              }
+                              disabled={busy}
+                              style={{
+                                ...inputStyle,
+                                padding: "7px 9px",
+                                fontSize: "13px",
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => saveUserName(user.id)}
+                              disabled={busy}
+                              style={secondaryActionBtnStyle}
+                            >
+                              Guardar
+                            </button>
+                          </div>
+                        </Td>
+                        <Td>{formatDocument(user)}</Td>
+                        <Td>{user.phone || "-"}</Td>
+                        <Td>{formatAddress(user)}</Td>
+                        <Td>
+                          <select
+                            value={user.plan}
+                            disabled={busy}
+                            onChange={(e) =>
+                              updateUser(user.id, { plan: e.target.value as Plan })
+                            }
+                            style={selectStyle}
+                          >
+                            {PLAN_OPTIONS.map((plan) => (
+                              <option key={plan} value={plan}>
+                                {plan}
+                              </option>
+                            ))}
+                          </select>
+                        </Td>
+                        <Td>
+                          <select
+                            value={user.role}
+                            disabled={busy}
+                            onChange={(e) =>
+                              updateUser(user.id, { role: e.target.value as Role })
+                            }
+                            style={selectStyle}
+                          >
+                            {ROLE_OPTIONS.map((role) => (
+                              <option key={role} value={role}>
+                                {role}
+                              </option>
+                            ))}
+                          </select>
+                        </Td>
+                        <Td>{user.device_count}</Td>
+                        <Td>{formatDate(user.created_at)}</Td>
+                        <Td>{formatDate(user.last_sign_in_at)}</Td>
+                        <Td>
+                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                            <button
+                              type="button"
+                              onClick={() => toggleUserDetails(user)}
+                              disabled={busy}
+                              style={secondaryActionBtnStyle}
+                            >
+                              {showDetails ? "Ocultar ficha" : "Ver ficha"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openUserDashboard(user.id)}
+                              disabled={busy}
+                              style={secondaryActionBtnStyle}
+                            >
+                              Dashboard
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteUser(user.id, user.email)}
+                              disabled={busy}
+                              style={dangerBtnStyle}
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </Td>
+                      </tr>
+
+                      {showDetails && (
+                        <tr style={{ borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
+                          <td colSpan={12} style={{ padding: "12px" }}>
+                            <div
+                              style={{
+                                border: "1px solid #e2e8f0",
+                                borderRadius: "10px",
+                                padding: "12px",
+                                background: "white",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gap: "8px",
+                                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                                }}
+                              >
+                                <DetailItem label="User ID" value={user.id} />
+                                <DetailItem
+                                  label="Email confirmado"
+                                  value={formatDate(user.email_confirmed_at)}
+                                />
+                                <DetailItem
+                                  label="Fecha de nacimiento"
+                                  value={draft.birth_date || "-"}
+                                />
+                                <DetailItem
+                                  label="Dirección resumida"
+                                  value={formatAddress(user)}
+                                />
+                              </div>
+
+                              <div
+                                style={{
+                                  marginTop: "10px",
+                                  display: "grid",
+                                  gap: "8px",
+                                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                                }}
+                              >
+                                <div>
+                                  <div style={fieldLabelStyle}>Tipo de documento</div>
+                                  <select
+                                    value={draft.document_type}
+                                    onChange={(e) =>
+                                      setProfileField(
+                                        user.id,
+                                        "document_type",
+                                        e.target.value as DocumentTypeValue
+                                      )
+                                    }
+                                    disabled={busy}
+                                    style={{ ...selectStyle, width: "100%" }}
+                                  >
+                                    <option value="">Sin definir</option>
+                                    <option value="DNI">DNI</option>
+                                    <option value="CUIT">CUIT</option>
+                                  </select>
+                                </div>
+
+                                <div>
+                                  <div style={fieldLabelStyle}>Número documento</div>
+                                  <input
+                                    value={draft.document_number}
+                                    onChange={(e) =>
+                                      setProfileField(user.id, "document_number", e.target.value)
+                                    }
+                                    disabled={busy}
+                                    placeholder="DNI/CUIT"
+                                    style={inputStyle}
+                                  />
+                                </div>
+
+                                <div>
+                                  <div style={fieldLabelStyle}>Teléfono</div>
+                                  <input
+                                    value={draft.phone}
+                                    onChange={(e) => setProfileField(user.id, "phone", e.target.value)}
+                                    disabled={busy}
+                                    placeholder="Teléfono"
+                                    style={inputStyle}
+                                  />
+                                </div>
+
+                                <div>
+                                  <div style={fieldLabelStyle}>Nacimiento</div>
+                                  <input
+                                    type="date"
+                                    value={draft.birth_date}
+                                    onChange={(e) => setProfileField(user.id, "birth_date", e.target.value)}
+                                    disabled={busy}
+                                    style={inputStyle}
+                                  />
+                                </div>
+
+                                <div>
+                                  <div style={fieldLabelStyle}>Dirección</div>
+                                  <input
+                                    value={draft.address}
+                                    onChange={(e) => setProfileField(user.id, "address", e.target.value)}
+                                    disabled={busy}
+                                    placeholder="Calle y número"
+                                    style={inputStyle}
+                                  />
+                                </div>
+
+                                <div>
+                                  <div style={fieldLabelStyle}>Localidad</div>
+                                  <input
+                                    value={draft.locality}
+                                    onChange={(e) => setProfileField(user.id, "locality", e.target.value)}
+                                    disabled={busy}
+                                    placeholder="Localidad"
+                                    style={inputStyle}
+                                  />
+                                </div>
+
+                                <div>
+                                  <div style={fieldLabelStyle}>Provincia</div>
+                                  <input
+                                    value={draft.province}
+                                    onChange={(e) => setProfileField(user.id, "province", e.target.value)}
+                                    disabled={busy}
+                                    placeholder="Provincia"
+                                    style={inputStyle}
+                                  />
+                                </div>
+
+                                <div>
+                                  <div style={fieldLabelStyle}>País</div>
+                                  <input
+                                    value={draft.country}
+                                    onChange={(e) => setProfileField(user.id, "country", e.target.value)}
+                                    disabled={busy}
+                                    placeholder="País"
+                                    style={inputStyle}
+                                  />
+                                </div>
+                              </div>
+
+                              <div style={{ marginTop: "10px" }}>
+                                <button
+                                  type="button"
+                                  onClick={() => saveUserProfile(user.id)}
+                                  disabled={busy}
+                                  style={primaryBtnStyle}
+                                >
+                                  Guardar ficha
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -396,6 +1013,21 @@ function Td({ children }: { children: ReactNode }) {
     <td style={{ padding: "10px 12px", fontSize: "14px", color: "#0f172a" }}>
       {children}
     </td>
+  );
+}
+
+function DetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div
+      style={{
+        border: "1px solid #e2e8f0",
+        borderRadius: "8px",
+        padding: "8px 10px",
+      }}
+    >
+      <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "4px" }}>{label}</div>
+      <div style={{ fontSize: "14px", color: "#0f172a", wordBreak: "break-word" }}>{value}</div>
+    </div>
   );
 }
 
@@ -444,3 +1076,22 @@ const dangerBtnStyle: React.CSSProperties = {
   fontWeight: 600,
   cursor: "pointer",
 };
+
+const secondaryActionBtnStyle: React.CSSProperties = {
+  border: "1px solid #d1d5db",
+  borderRadius: "8px",
+  padding: "7px 10px",
+  background: "white",
+  color: "#111827",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const fieldLabelStyle: React.CSSProperties = {
+  fontSize: "12px",
+  color: "#64748b",
+  marginBottom: "4px",
+};
+
+
+
