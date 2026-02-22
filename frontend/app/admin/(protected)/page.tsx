@@ -1265,7 +1265,7 @@ export default function AdminPage() {
                                 <DetailItem label="Estado" value={formatCheckoutStatus(item.status)} />
                                 <DetailItem label="Plan" value={item.plan} />
                                 <DetailItem label="Tipo cliente" value={item.property_type} />
-                                <DetailItem label="Direccion" value={item.buyer_address} />
+                                <DetailItem label="Dirección" value={item.buyer_address} />
                                 <DetailItem label="Idempotency key" value={item.idempotency_key || "-"} />
                               </div>
 

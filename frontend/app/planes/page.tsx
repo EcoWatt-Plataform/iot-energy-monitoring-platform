@@ -11,7 +11,7 @@ export default function PlanesPage() {
             lineHeight: 1.6,
           }}
         >
-          Servicio SaaS mensual. Elegi el plan segun la cantidad de
+          Servicio SaaS mensual. Elegí el plan según la cantidad de
           medidores que necesites monitorear.
         </p>
       </div>
@@ -28,7 +28,7 @@ export default function PlanesPage() {
         }}
       >
         <PlanCard
-          name="Basico"
+          name="Básico"
           imageSrc="/basico.jpeg"
           tagline="ARS 7.900/mes"
           features={[
@@ -118,7 +118,7 @@ export default function PlanesPage() {
                 lineHeight: 1.6,
               }}
             >
-              Tipos de medidor: EcoWatt Plug o EcoWatt Panel. Podes sumar fases extra
+              Tipos de medidor: EcoWatt Plug o EcoWatt Panel. Podés sumar fases extra
               como adicional.
             </p>
 
@@ -228,7 +228,7 @@ function PlanCard(props: {
         >
           <img
             src={imageSrc}
-            alt={`Ilustracion plan ${name}`}
+            alt={`Ilustración plan ${name}`}
             style={{
               maxHeight: "100%",
               maxWidth: "100%",

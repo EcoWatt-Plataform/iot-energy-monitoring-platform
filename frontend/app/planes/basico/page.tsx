@@ -85,7 +85,7 @@ export default function PlanBasicoPage() {
       </div>
 
       <div style={{ maxWidth: "1100px", margin: "40px auto 0" }}>
-        <h2 style={{ fontSize: "26px", marginBottom: "12px" }}>Que incluye el Plan Basico?</h2>
+        <h2 style={{ fontSize: "26px", marginBottom: "12px" }}>¿Qué incluye el Plan Básico?</h2>
 
         <div
           style={{
@@ -108,7 +108,7 @@ export default function PlanBasicoPage() {
           <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
             <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Limitaciones</h3>
             <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
-              <li>Capacidad maxima: 1 medidor</li>
+              <li>Capacidad máxima: 1 medidor</li>
               <li>No incluye comparativas avanzadas</li>
               <li>No incluye exportaciones</li>
             </ul>

@@ -85,7 +85,7 @@ export default function PlanAvanzadoPage() {
       </div>
 
       <div style={{ maxWidth: "1100px", margin: "40px auto 0" }}>
-        <h2 style={{ fontSize: "26px", marginBottom: "12px" }}>Que incluye el Plan Avanzado?</h2>
+        <h2 style={{ fontSize: "26px", marginBottom: "12px" }}>¿Qué incluye el Plan Avanzado?</h2>
 
         <div
           style={{
@@ -106,7 +106,7 @@ export default function PlanAvanzadoPage() {
           </div>
 
           <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
-            <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Comparado con Basico</h3>
+            <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Comparado con Básico</h3>
             <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
               <li>De 1 a 3 medidores</li>
               <li>De 3 a 12 meses de historial</li>

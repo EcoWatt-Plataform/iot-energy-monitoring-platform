@@ -306,7 +306,7 @@ export default function Header() {
           }}
           onClick={() => setIsMobileMenuOpen(false)}
         >
-          <img src="/logo.png" alt="EcoWatt" style={{ height: isMobile ? "26px" : "30px", width: "auto" }} />
+          <img src="/logo.PNG" alt="EcoWatt" style={{ height: isMobile ? "26px" : "30px", width: "auto" }} />
           <span style={{ color: textColor, fontWeight: 700, fontSize: isMobile ? "15px" : "16px" }}>EcoWatt</span>
         </Link>
 
