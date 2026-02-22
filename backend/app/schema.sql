@@ -27,3 +27,25 @@ ON measurements(device_id, ts);
 
 CREATE INDEX IF NOT EXISTS idx_devices_owner_user_id
 ON devices(owner_user_id);
+
+CREATE TABLE IF NOT EXISTS checkout_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  plan TEXT NOT NULL,
+  plan_price_ars INTEGER NOT NULL,         -- ARS * 100 (centavos)
+  max_meters INTEGER NOT NULL,
+  plug_qty INTEGER NOT NULL,
+  panel_qty INTEGER NOT NULL,
+  hardware_total_ars INTEGER NOT NULL,     -- ARS * 100 (centavos)
+  total_ars INTEGER NOT NULL,              -- ARS * 100 (centavos)
+  buyer_full_name TEXT NOT NULL,
+  buyer_phone TEXT NOT NULL,
+  buyer_email TEXT NOT NULL,
+  buyer_document_type TEXT NOT NULL,
+  buyer_document_number TEXT NOT NULL,
+  buyer_address TEXT NOT NULL,
+  property_type TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_checkout_requests_created_at
+ON checkout_requests(created_at);

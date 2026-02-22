@@ -1,7 +1,7 @@
 export default function PlanAvanzadoPage() {
   return (
     <div style={{ padding: "32px" }}>
-      {/* HERO: imagen grande + texto arriba (sin recuadro) */}
+      {/* HERO: imagen grande + texto arriba */}
       <div
         style={{
           position: "relative",
@@ -11,8 +11,8 @@ export default function PlanAvanzadoPage() {
         }}
       >
         <img
-          src="/basico.jpeg"
-          alt="Plan Básico EcoWatt"
+          src="/avanzado.jpeg"
+          alt="Plan Avanzado EcoWatt"
           style={{
             width: "100%",
             height: "420px",
@@ -21,13 +21,12 @@ export default function PlanAvanzadoPage() {
           }}
         />
 
-        {/* Texto arriba a la derecha (sin caja) */}
         <div
           style={{
             position: "absolute",
             top: "22px",
             right: "22px",
-            width: "min(420px, 92%)",
+            width: "min(430px, 92%)",
             padding: "22px",
             textAlign: "left",
             background: "rgba(255, 255, 255, 0.92)",
@@ -45,12 +44,13 @@ export default function PlanAvanzadoPage() {
           </h1>
 
           <p style={{ lineHeight: 1.6, margin: 0, marginBottom: "14px", opacity: 0.95 }}>
-            Ideal para hogares: monitoreá varios dispositivos y compará consumos con gráficos más completos.
+            Todo lo del plan Básico, con más capacidad para hogares con varios equipos.
           </p>
 
           <ul style={{ margin: 0, lineHeight: 1.7 }}>
-            <li>Gráficos día / semana / mes</li>
-            <li>Historial extendido</li>
+            <li>Hasta 3 medidores asociados</li>
+            <li>Historial de 12 meses</li>
+            <li>Comparativas entre dispositivos</li>
             <li>Alertas simples</li>
           </ul>
 
@@ -100,40 +100,39 @@ export default function PlanAvanzadoPage() {
             gap: "18px",
           }}
         >
-          {/* Incluye */}
           <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
             <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Incluye</h3>
             <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
-              <li>Monitoreo en tiempo real</li>
-              <li>Gráficos por día, semana y mes</li>
-              <li>Historial extendido</li>
-              <li>Comparación entre dispositivos</li>
-              <li>Alertas simples por consumo elevado</li>
+              <li>Todo lo del plan Básico</li>
+              <li>Hasta 3 medidores por cuenta</li>
+              <li>Dashboard diario, semanal y mensual</li>
+              <li>Comparativas entre medidores</li>
+              <li>Historial de 12 meses</li>
+              <li>Alertas simples por umbral mensual</li>
             </ul>
           </div>
 
-          {/* Para quién */}
           <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
             <h3 style={{ marginTop: 0, marginBottom: "10px" }}>¿Para quién sirve?</h3>
             <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
               <li>Para hogares con varios electrodomésticos</li>
-              <li>Para comparar consumos y detectar excesos</li>
-              <li>Para tomar decisiones de ahorro más informadas</li>
+              <li>Para comparar consumos entre equipos</li>
+              <li>Para seguir tendencias durante todo el año</li>
             </ul>
           </div>
 
-          {/* Diferencias */}
           <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
             <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Comparado con Básico</h3>
             <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
-              <li>Historial más largo</li>
-              <li>Más tipos de gráficos</li>
+              <li>De 1 a 3 medidores</li>
+              <li>De 3 a 12 meses de historial</li>
+              <li>Se habilitan comparativas</li>
             </ul>
           </div>
         </div>
       </div>
 
-      {/* SECCIÓN “APP” estilo: texto izq + imagen medio + texto der */}
+      {/* SECCION APP */}
       <div style={{ maxWidth: "1100px", margin: "56px auto 0" }}>
         <div
           style={{
@@ -144,21 +143,19 @@ export default function PlanAvanzadoPage() {
             flexWrap: "wrap",
           }}
         >
-          {/* IZQUIERDA */}
           <div style={{ maxWidth: "360px", flex: "1 1 260px" }}>
             <h2 style={{ fontSize: "28px", marginBottom: "12px" }}>
               La app en el plan Avanzado
             </h2>
             <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
-              Compará consumos entre dispositivos y analizá tu consumo con gráficos diarios, semanales y mensuales.
+              Mirá más contexto histórico y compara medidores para detectar oportunidades de ahorro.
             </p>
           </div>
 
-          {/* MEDIO (CELULAR) */}
           <div style={{ flex: "1 1 280px", display: "flex", justifyContent: "center" }}>
             <img
-              src="/medio-app.png" // <-- tu imagen del celular
-              alt="Aplicación EcoWatt - Plan Avanzado"
+              src="/medio-app.png"
+              alt="Aplicacion EcoWatt - Plan Avanzado"
               style={{
                 width: "320px",
                 maxWidth: "100%",
@@ -169,32 +166,31 @@ export default function PlanAvanzadoPage() {
             />
           </div>
 
-          {/* DERECHA (más features que Básico) */}
           <div style={{ maxWidth: "360px", flex: "1 1 260px" }}>
             <div style={{ marginBottom: "18px" }}>
               <h3 style={{ fontSize: "18px", marginBottom: "6px" }}>
-                Gráficos día / semana / mes
+                Hasta 3 medidores
               </h3>
               <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
-                Analizá tu consumo con más detalle y encontrá patrones.
+                Controla varios puntos de consumo en una sola cuenta.
               </p>
             </div>
 
             <div style={{ marginBottom: "18px" }}>
               <h3 style={{ fontSize: "18px", marginBottom: "6px" }}>
-                Comparación por dispositivo
+                Comparativas
               </h3>
               <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
-                Identificá qué equipos consumen más y cuándo.
+                Compará dispositivos para saber cuáles consumen más y en qué período.
               </p>
             </div>
 
             <div>
               <h3 style={{ fontSize: "18px", marginBottom: "6px" }}>
-                Alertas simples
+                Historial y alertas
               </h3>
               <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
-                Recibí avisos cuando el consumo supere un umbral.
+                Revisá 12 meses y recibí alertas simples cuando un medidor supera su umbral.
               </p>
             </div>
           </div>

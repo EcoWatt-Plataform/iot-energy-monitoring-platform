@@ -1,19 +1,22 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-
-type PlanId = "basico" | "avanzado" | "premium";
-type ItemId = PlanId | "dispositivo";
-
-type CartItem = {
-  id: ItemId;
-  nombre: string;
-  precio: number;
-  cantidad: number;
-};
-
-const CART_KEY = "ecowatt_cart_v2";
-const CHECKOUT_KEY = "ecowatt_checkout_draft_v1";
+import {
+  type BuyerFormData,
+  DEFAULT_BUYER_FORM,
+  METER_PRODUCTS,
+  PLAN_CONFIG,
+  clearCheckoutDraft,
+  clearPurchaseCart,
+  meterHardwareTotal,
+  normalizeCart,
+  overallTotal,
+  readCheckoutDraft,
+  readPurchaseCart,
+  totalMeters,
+  writeCheckoutDraft,
+} from "@/lib/purchase";
 
 function money(n: number) {
   return new Intl.NumberFormat("es-AR", {
@@ -23,21 +26,17 @@ function money(n: number) {
 }
 
 export default function CheckoutPage() {
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [loadingCart, setLoadingCart] = useState(true);
-
   const [isMobile, setIsMobile] = useState(false);
-
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [usageDetails, setUsageDetails] = useState("");
-
-  const [err, setErr] = useState<string | null>(null);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [cart, setCart] = useState(() => readPurchaseCart());
+  const [form, setForm] = useState<BuyerFormData>(() => readCheckoutDraft());
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [requestId, setRequestId] = useState<number | null>(null);
 
   useEffect(() => {
     function onResize() {
-      setIsMobile(window.innerWidth < 900);
+      setIsMobile(window.innerWidth < 920);
     }
     onResize();
     window.addEventListener("resize", onResize);
@@ -45,214 +44,401 @@ export default function CheckoutPage() {
   }, []);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(CART_KEY);
-      const items: CartItem[] = raw ? JSON.parse(raw) : [];
-      setCart(Array.isArray(items) ? items : []);
-    } catch {
-      setCart([]);
-    } finally {
-      setLoadingCart(false);
-    }
+    const latest = normalizeCart(readPurchaseCart());
+    setCart(latest);
   }, []);
 
-  const subtotal = useMemo(() => {
-    return cart.reduce((acc, x) => acc + x.precio * x.cantidad, 0);
+  useEffect(() => {
+    writeCheckoutDraft(form);
+  }, [form]);
+
+  const selectedMeters = totalMeters(cart.meters);
+  const hasValidCart = Boolean(cart.plan) && selectedMeters > 0;
+
+  const summary = useMemo(() => {
+    const planPrice = cart.plan ? PLAN_CONFIG[cart.plan].monthlyPrice : 0;
+    const hardware = meterHardwareTotal(cart.meters);
+    const total = overallTotal(cart);
+    return { planPrice, hardware, total };
   }, [cart]);
 
-  function validate() {
-    setErr(null);
-    setOkMsg(null);
+  function patchForm<K extends keyof BuyerFormData>(key: K, value: BuyerFormData[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
 
-    if (!cart.length) return "Tu carrito está vacío.";
-    if (!fullName.trim()) return "Completá tu nombre.";
-    if (!email.trim()) return "Completá tu email.";
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return "El email no es válido.";
+  function validate(): string | null {
+    if (!hasValidCart || !cart.plan) {
+      return "Falta completar el Paso 1 y Paso 2 en el carrito.";
+    }
+
+    if (!form.fullName.trim()) return "Completá nombre y apellido.";
+    if (!form.phone.trim()) return "Completá teléfono.";
+    if (!form.email.trim()) return "Completá email.";
+    if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) return "El email no es válido.";
+    if (!form.documentNumber.trim()) return "Completá DNI o CUIT.";
+    if (!form.address.trim()) return "Completá dirección.";
+
+    const digits = form.documentNumber.replace(/\D/g, "");
+    if (form.documentType === "dni" && (digits.length < 7 || digits.length > 10)) {
+      return "El DNI debe tener entre 7 y 10 dígitos.";
+    }
+    if (form.documentType === "cuit" && digits.length !== 11) {
+      return "El CUIT debe tener 11 dígitos.";
+    }
 
     return null;
   }
 
-  function onSubmit() {
-    const msg = validate();
-    if (msg) {
-      setErr(msg);
+  async function submitOrder() {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setRequestId(null);
+
+    const validation = validate();
+    if (validation) {
+      setErrorMessage(validation);
+      return;
+    }
+
+    if (!cart.plan) {
+      setErrorMessage("No se encontró plan seleccionado.");
       return;
     }
 
     const payload = {
-      buyer: {
-        fullName: fullName.trim(),
-        email: email.trim(),
-        usageDetails: usageDetails.trim(),
+      plan: cart.plan,
+      meters: {
+        plug: cart.meters.plug,
+        panel: cart.meters.panel,
       },
-      cart,
-      totals: { subtotal },
-      createdAt: new Date().toISOString(),
+      buyer: {
+        full_name: form.fullName.trim(),
+        phone: form.phone.trim(),
+        email: form.email.trim().toLowerCase(),
+        document_type: form.documentType,
+        document_number: form.documentNumber.trim(),
+        address: form.address.trim(),
+        property_type: form.propertyType,
+      },
     };
 
-    localStorage.setItem(CHECKOUT_KEY, JSON.stringify(payload));
-    setOkMsg("Pedido guardado correctamente.");
-  }
+    try {
+      setSubmitting(true);
+      const res = await fetch("/api/v1/checkout/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-  if (loadingCart) {
-    return (
-      <div style={{ padding: "40px", maxWidth: "1100px", margin: "0 auto" }}>
-        Cargando checkout...
-      </div>
-    );
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        request_id?: number;
+        error?: string;
+      };
+
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo enviar la solicitud.");
+      }
+
+      setRequestId(typeof data.request_id === "number" ? data.request_id : null);
+      setSuccessMessage("Formulario enviado correctamente. Te contactaremos a la brevedad.");
+      clearCheckoutDraft();
+      clearPurchaseCart();
+      setForm({ ...DEFAULT_BUYER_FORM });
+      setCart({ plan: null, meters: { plug: 0, panel: 0 } });
+    } catch (error: unknown) {
+      setErrorMessage(error instanceof Error ? error.message : "No se pudo enviar la solicitud.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
-    <div
-      style={{
-        padding: isMobile ? "18px" : "40px",
-        maxWidth: "1100px",
-        margin: "0 auto",
-      }}
-    >
-      <h1 style={{ fontSize: isMobile ? "28px" : "40px", marginBottom: "20px" }}>Checkout</h1>
+    <div style={{ maxWidth: "1140px", margin: "0 auto", padding: isMobile ? "18px" : "36px" }}>
+      <h1 style={{ marginTop: 0, marginBottom: "8px", fontSize: isMobile ? "28px" : "40px" }}>
+        Paso 3: Carga tus datos
+      </h1>
+      <p style={{ marginTop: 0, color: "#64748b", marginBottom: "18px" }}>
+        Completa tus datos para enviar el formulario de compra.
+      </p>
 
-      {err && (
-        <div
-          style={{
-            background: "#ffecec",
-            border: "1px solid #ffb3b3",
-            padding: "12px",
-            borderRadius: "10px",
-            marginBottom: "14px",
-          }}
-        >
-          {err}
-        </div>
-      )}
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "18px" }}>
+        <span style={stepDone}>Paso 1: Plan</span>
+        <span style={stepDone}>Paso 2: Medidores</span>
+        <span style={stepActive}>Paso 3: Datos</span>
+      </div>
 
-      {okMsg && (
-        <div
-          style={{
-            background: "#ecfff0",
-            border: "1px solid #b7f0c2",
-            padding: "12px",
-            borderRadius: "10px",
-            marginBottom: "14px",
-          }}
-        >
-          {okMsg}
-        </div>
-      )}
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "1fr 360px",
-          gap: "18px",
-          alignItems: "start",
-        }}
-      >
-        <div style={box}>
-          <h2 style={{ marginTop: 0, marginBottom: "14px" }}>Tus datos</h2>
-
-          <Field label="Nombre y apellido">
-            <input value={fullName} onChange={(e) => setFullName(e.target.value)} style={input} />
-          </Field>
-
-          <Field label="Email">
-            <input value={email} onChange={(e) => setEmail(e.target.value)} style={input} />
-          </Field>
-
-          <Field label="¿Para qué y dónde lo vas a usar?">
-            <textarea
-              value={usageDetails}
-              onChange={(e) => setUsageDetails(e.target.value)}
-              placeholder="Ej: Cocina y living del local, heladera, horno eléctrico, iluminación..."
-              style={{
-                ...input,
-                minHeight: "100px",
-                resize: "vertical",
-              }}
-            />
-          </Field>
-
-          <button onClick={onSubmit} style={primaryBtn}>
-            Continuar
-          </button>
-        </div>
-
-        <div style={box}>
-          <h2 style={{ marginTop: 0, marginBottom: "14px" }}>Resumen</h2>
-
-          {!cart.length ? (
-            <p style={{ margin: 0, color: "#666" }}>Tu carrito está vacío.</p>
-          ) : (
-            <>
-              {cart.map((x) => (
-                <div
-                  key={x.id}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: "10px",
-                    borderBottom: "1px solid #eee",
-                    paddingBottom: "8px",
-                  }}
-                >
-                  <span>
-                    {x.nombre} x{x.cantidad}
-                  </span>
-                  <span style={{ fontWeight: 700 }}>{money(x.precio * x.cantidad)}</span>
-                </div>
-              ))}
-
-              <div
-                style={{
-                  marginTop: "12px",
-                  fontWeight: 800,
-                  display: "flex",
-                  justifyContent: "space-between",
-                }}
-              >
-                <span>Total</span>
-                <span>{money(subtotal)}</span>
-              </div>
-            </>
+      {errorMessage && <div style={errorBox}>{errorMessage}</div>}
+      {successMessage && (
+        <div style={successBox}>
+          {successMessage}
+          {requestId !== null && (
+            <div style={{ marginTop: "6px", fontWeight: 700 }}>Solicitud #{requestId}</div>
           )}
         </div>
-      </div>
+      )}
+
+      {!hasValidCart ? (
+        <section style={panel}>
+          <h2 style={{ marginTop: 0 }}>No hay selección de compra</h2>
+          <p style={{ color: "#64748b" }}>
+            Antes de enviar el formulario, completa el Paso 1 y Paso 2 en el carrito.
+          </p>
+          <Link href="/carrito" style={linkButton}>
+            Ir al carrito
+          </Link>
+        </section>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gap: "16px",
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 340px",
+            alignItems: "start",
+          }}
+        >
+          <section style={panel}>
+            <h2 style={{ marginTop: 0, marginBottom: "12px" }}>Datos del cliente</h2>
+
+            <Field label="Nombre y apellido">
+              <input
+                value={form.fullName}
+                onChange={(e) => patchForm("fullName", e.target.value)}
+                style={inputStyle}
+                placeholder="Ej: Tomas Sisterna"
+              />
+            </Field>
+
+            <Field label="Teléfono">
+              <input
+                value={form.phone}
+                onChange={(e) => patchForm("phone", e.target.value)}
+                style={inputStyle}
+                placeholder="Ej: +54 9 11 1234 5678"
+              />
+            </Field>
+
+            <Field label="Email">
+              <input
+                value={form.email}
+                onChange={(e) => patchForm("email", e.target.value)}
+                style={inputStyle}
+                placeholder="tucorreo@dominio.com"
+              />
+            </Field>
+
+            <div style={{ display: "grid", gap: "10px", gridTemplateColumns: isMobile ? "1fr" : "140px 1fr" }}>
+              <Field label="Documento">
+                <select
+                  value={form.documentType}
+                  onChange={(e) => patchForm("documentType", e.target.value === "cuit" ? "cuit" : "dni")}
+                  style={inputStyle}
+                >
+                  <option value="dni">DNI</option>
+                  <option value="cuit">CUIT</option>
+                </select>
+              </Field>
+
+              <Field label="Número">
+                <input
+                  value={form.documentNumber}
+                  onChange={(e) => patchForm("documentNumber", e.target.value)}
+                  style={inputStyle}
+                  placeholder={form.documentType === "cuit" ? "20123456789" : "30111222"}
+                />
+              </Field>
+            </div>
+
+            <Field label="Dirección">
+              <input
+                value={form.address}
+                onChange={(e) => patchForm("address", e.target.value)}
+                style={inputStyle}
+                placeholder="Calle, numero, localidad"
+              />
+            </Field>
+
+            <Field label="Tipo de cliente">
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => patchForm("propertyType", "casa")}
+                  style={form.propertyType === "casa" ? choiceActive : choiceBtn}
+                >
+                  Casa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => patchForm("propertyType", "empresa")}
+                  style={form.propertyType === "empresa" ? choiceActive : choiceBtn}
+                >
+                  Empresa
+                </button>
+              </div>
+            </Field>
+
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "12px" }}>
+              <button type="button" onClick={submitOrder} disabled={submitting} style={submitBtn}>
+                {submitting ? "Enviando..." : "Enviar formulario"}
+              </button>
+              <Link href="/carrito" style={secondaryLink}>
+                Volver al carrito
+              </Link>
+            </div>
+          </section>
+
+          <aside style={panel}>
+            <h2 style={{ marginTop: 0, marginBottom: "12px", fontSize: "20px" }}>Resumen final</h2>
+            <div style={lineItem}>
+              <span>Plan</span>
+              <strong>{cart.plan ? PLAN_CONFIG[cart.plan].label : "-"}</strong>
+            </div>
+            <div style={lineItem}>
+              <span>EcoWatt Plug</span>
+              <strong>
+                {cart.meters.plug} x {money(METER_PRODUCTS.plug.price)}
+              </strong>
+            </div>
+            <div style={lineItem}>
+              <span>EcoWatt Panel</span>
+              <strong>
+                {cart.meters.panel} x {money(METER_PRODUCTS.panel.price)}
+              </strong>
+            </div>
+            <div style={lineItem}>
+              <span>Total medidores</span>
+              <strong>{selectedMeters}</strong>
+            </div>
+
+            <hr style={{ border: 0, borderTop: "1px solid #e2e8f0", margin: "12px 0" }} />
+
+            <div style={lineItem}>
+              <span>Suscripción mensual</span>
+              <strong>{money(summary.planPrice)}</strong>
+            </div>
+            <div style={lineItem}>
+              <span>Hardware</span>
+              <strong>{money(summary.hardware)}</strong>
+            </div>
+            <div style={{ ...lineItem, fontSize: "16px" }}>
+              <strong>Total inicial</strong>
+              <strong>{money(summary.total)}</strong>
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }
 
 function Field(props: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ marginBottom: "14px", display: "flex", flexDirection: "column", gap: "6px" }}>
-      <label style={{ fontSize: "13px", color: "#555" }}>{props.label}</label>
+    <label style={{ display: "grid", gap: "6px", marginBottom: "12px" }}>
+      <span style={{ fontSize: "13px", color: "#475569" }}>{props.label}</span>
       {props.children}
-    </div>
+    </label>
   );
 }
 
-const box: React.CSSProperties = {
-  border: "1px solid #eee",
+const panel: React.CSSProperties = {
+  border: "1px solid #e2e8f0",
   borderRadius: "16px",
-  padding: "20px",
-  background: "white",
+  padding: "16px",
+  background: "#fff",
 };
 
-const input: React.CSSProperties = {
-  border: "1px solid #ddd",
+const inputStyle: React.CSSProperties = {
+  border: "1px solid #d1d5db",
   borderRadius: "10px",
-  padding: "12px",
+  padding: "11px 12px",
+  fontSize: "15px",
   width: "100%",
-  fontSize: "16px",
 };
 
-const primaryBtn: React.CSSProperties = {
-  marginTop: "18px",
-  width: "100%",
-  padding: "14px",
-  borderRadius: "12px",
+const submitBtn: React.CSSProperties = {
   border: "none",
-  cursor: "pointer",
-  fontWeight: 700,
-  color: "white",
+  borderRadius: "12px",
+  padding: "12px 14px",
   background: "linear-gradient(90deg, #6992eb, #9b6ceb)",
+  color: "#111827",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const secondaryLink: React.CSSProperties = {
+  border: "1px solid #d1d5db",
+  borderRadius: "12px",
+  padding: "12px 14px",
+  color: "#0f172a",
+  textDecoration: "none",
+};
+
+const choiceBtn: React.CSSProperties = {
+  border: "1px solid #d1d5db",
+  borderRadius: "10px",
+  padding: "10px 12px",
+  background: "#fff",
+  cursor: "pointer",
+};
+
+const choiceActive: React.CSSProperties = {
+  ...choiceBtn,
+  border: "1px solid #2563eb",
+  background: "#eff6ff",
+  color: "#1d4ed8",
+  fontWeight: 700,
+};
+
+const lineItem: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "10px",
+  marginBottom: "8px",
+  color: "#334155",
+};
+
+const errorBox: React.CSSProperties = {
+  border: "1px solid #fecaca",
+  background: "#fff1f2",
+  color: "#9f1239",
+  borderRadius: "10px",
+  padding: "10px 12px",
+  marginBottom: "14px",
+};
+
+const successBox: React.CSSProperties = {
+  border: "1px solid #bbf7d0",
+  background: "#ecfdf3",
+  color: "#166534",
+  borderRadius: "10px",
+  padding: "10px 12px",
+  marginBottom: "14px",
+};
+
+const stepDone: React.CSSProperties = {
+  border: "1px solid #bfdbfe",
+  borderRadius: "999px",
+  padding: "5px 10px",
+  fontSize: "12px",
+  background: "#eff6ff",
+  color: "#1d4ed8",
+};
+
+const stepActive: React.CSSProperties = {
+  border: "1px solid #16a34a",
+  borderRadius: "999px",
+  padding: "5px 10px",
+  fontSize: "12px",
+  background: "#ecfdf3",
+  color: "#166534",
+};
+
+const linkButton: React.CSSProperties = {
+  display: "inline-block",
+  borderRadius: "12px",
+  padding: "11px 14px",
+  textDecoration: "none",
+  background: "linear-gradient(90deg, #6992eb, #9b6ceb)",
+  color: "#111827",
+  fontWeight: 700,
 };

@@ -245,6 +245,25 @@ _PLAN_ALIASES: dict[str, str] = {
 }
 _PLAN_METADATA_KEYS = ("plan", "subscription_plan", "subscription", "tier", "plan_name")
 
+_CHECKOUT_PLAN_RULES: dict[str, dict[str, float | int]] = {
+    "basico": {"max_meters": 1, "plan_price_ars": 1500},
+    "avanzado": {"max_meters": 3, "plan_price_ars": 2900},
+    "premium": {"max_meters": 6, "plan_price_ars": 4500},
+}
+
+_CHECKOUT_METER_PRICES: dict[str, int] = {
+    "plug": 12000,
+    "panel": 18000,
+}
+
+# Simple sliding-window rate limiter for the public checkout endpoint.
+# Limits each IP to _CHECKOUT_RATE_LIMIT requests per _CHECKOUT_RATE_WINDOW seconds.
+_CHECKOUT_RATE_LIMIT = 5
+_CHECKOUT_RATE_WINDOW = 60  # seconds
+_CHECKOUT_MAX_IPS = 10000   # evict expired entries when dict exceeds this size
+_checkout_ip_timestamps: dict[str, list[float]] = {}
+_checkout_rate_lock = threading.Lock()
+
 
 def _normalize_plan(value: object) -> str:
     """Return canonical plan name from a raw metadata value."""
@@ -301,6 +320,88 @@ def _plan_from_user(user: dict) -> str:
         if key in meta:
             return _normalize_plan(meta[key])
     return "basico"
+
+
+def _plan_device_limit(plan: str) -> int | None:
+    if plan == "basico":
+        return 1
+    if plan == "avanzado":
+        return 3
+    if plan == "premium":
+        return 6
+    return None
+
+
+def _plan_history_months(plan: str) -> int | None:
+    if plan == "basico":
+        return 3
+    if plan == "avanzado":
+        return 12
+    return None
+
+
+def _history_min_month(history_months: int) -> str:
+    months = max(1, int(history_months))
+    now = datetime.utcnow()
+    year = now.year
+    month = now.month - (months - 1)
+    while month <= 0:
+        month += 12
+        year -= 1
+    return f"{year:04d}-{month:02d}"
+
+
+def _enforce_month_history_limit(plan: str, month: str):
+    history_months = _plan_history_months(plan)
+    if history_months is None:
+        return None
+
+    min_month = _history_min_month(history_months)
+    if month < min_month:
+        return jsonify({
+            "error": (
+                f"Plan {plan.capitalize()} allows up to {history_months} months of history. "
+                f"Minimum allowed month: {min_month}"
+            )
+        }), 403
+    return None
+
+
+def _enforce_date_history_limit(plan: str, date_from: str, date_to: str):
+    history_months = _plan_history_months(plan)
+    if history_months is None:
+        return None
+
+    min_month = _history_min_month(history_months)
+    from_month = date_from[:7]
+    to_month = date_to[:7]
+    if from_month < min_month or to_month < min_month:
+        return jsonify({
+            "error": (
+                f"Plan {plan.capitalize()} allows up to {history_months} months of history. "
+                f"Minimum allowed month: {min_month}"
+            )
+        }), 403
+    return None
+
+
+def _resolve_owner_plan(actor_user: dict, owner_user_id: str):
+    actor_id = str(actor_user.get("id") or "")
+    if owner_user_id == actor_id:
+        return _plan_from_user(actor_user), None
+
+    try:
+        payload = _supabase_admin_request("GET", f"auth/v1/admin/users/{owner_user_id}")
+    except RuntimeError as e:
+        return "", (jsonify({"error": str(e)}), 500)
+    except SupabaseAdminError as e:
+        return "", (jsonify({"error": e.message}), e.status)
+
+    target_user = _extract_supabase_admin_user(payload)
+    if not isinstance(target_user, dict):
+        return "", (jsonify({"error": "target user not found"}), 404)
+
+    return _plan_from_user(target_user), None
 
 
 def _device_counts_by_owner() -> dict[str, int]:
@@ -382,6 +483,154 @@ def api_health():
         "version": "v1",
         "time": datetime.utcnow().isoformat() + "Z",
     })
+
+
+@api_bp.post("/checkout/request")
+def create_checkout_request():
+    # Rate limit by client IP (5 requests per 60 seconds).
+    # Use X-Real-IP (set by nginx, not spoofable by clients) then remote_addr.
+    client_ip = (request.headers.get("X-Real-IP") or request.remote_addr or "").strip() or "unknown"
+    now = time.time()
+    with _checkout_rate_lock:
+        timestamps = _checkout_ip_timestamps.get(client_ip, [])
+        timestamps = [t for t in timestamps if now - t < _CHECKOUT_RATE_WINDOW]
+        if len(timestamps) >= _CHECKOUT_RATE_LIMIT:
+            _checkout_ip_timestamps[client_ip] = timestamps
+            return jsonify({"error": "too many requests, please try again later"}), 429
+        timestamps.append(now)
+        _checkout_ip_timestamps[client_ip] = timestamps
+        # Evict fully-expired entries to prevent unbounded memory growth.
+        if len(_checkout_ip_timestamps) > _CHECKOUT_MAX_IPS:
+            expired = [ip for ip, ts in _checkout_ip_timestamps.items()
+                       if not any(now - t < _CHECKOUT_RATE_WINDOW for t in ts)]
+            for ip in expired:
+                del _checkout_ip_timestamps[ip]
+
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "invalid JSON payload"}), 400
+
+    raw_plan = str(data.get("plan") or "").strip().lower()
+    if raw_plan not in _CHECKOUT_PLAN_RULES:
+        return jsonify({"error": "plan must be basico, avanzado or premium"}), 400
+    plan = raw_plan
+    plan_rule = _CHECKOUT_PLAN_RULES[plan]
+    max_meters = int(plan_rule["max_meters"])
+    plan_price_ars = int(plan_rule["plan_price_ars"]) * 100  # store as centavos
+
+    meters = data.get("meters") or {}
+    if not isinstance(meters, dict):
+        return jsonify({"error": "meters must be an object"}), 400
+
+    try:
+        plug_qty = int(meters.get("plug", 0))
+        panel_qty = int(meters.get("panel", 0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "meters quantities must be integers"}), 400
+
+    if plug_qty < 0 or panel_qty < 0:
+        return jsonify({"error": "meters quantities must be >= 0"}), 400
+
+    total_meters = plug_qty + panel_qty
+    if total_meters <= 0:
+        return jsonify({"error": "at least one meter is required"}), 400
+    if total_meters > max_meters:
+        return jsonify({
+            "error": f"plan {plan} allows up to {max_meters} meter(s)"
+        }), 400
+
+    buyer = data.get("buyer") or {}
+    if not isinstance(buyer, dict):
+        return jsonify({"error": "buyer must be an object"}), 400
+
+    full_name = str(buyer.get("full_name") or "").strip()
+    phone = str(buyer.get("phone") or "").strip()
+    email = str(buyer.get("email") or "").strip().lower()
+    document_type = str(buyer.get("document_type") or "").strip().lower()
+    document_number = str(buyer.get("document_number") or "").strip()
+    address = str(buyer.get("address") or "").strip()
+    property_type = str(buyer.get("property_type") or "").strip().lower()
+
+    if not full_name:
+        return jsonify({"error": "full_name is required"}), 400
+    if not phone:
+        return jsonify({"error": "phone is required"}), 400
+    if not email or not _is_valid_email(email):
+        return jsonify({"error": "valid email is required"}), 400
+    if document_type not in {"dni", "cuit"}:
+        return jsonify({"error": "document_type must be dni or cuit"}), 400
+    if not document_number:
+        return jsonify({"error": "document_number is required"}), 400
+    if not address:
+        return jsonify({"error": "address is required"}), 400
+    if property_type not in {"casa", "empresa"}:
+        return jsonify({"error": "property_type must be casa or empresa"}), 400
+
+    doc_digits = "".join(ch for ch in document_number if ch.isdigit())
+    if document_type == "dni" and (len(doc_digits) < 7 or len(doc_digits) > 10):
+        return jsonify({"error": "dni must have 7 to 10 digits"}), 400
+    if document_type == "cuit" and len(doc_digits) != 11:
+        return jsonify({"error": "cuit must have 11 digits"}), 400
+
+    if len(full_name) > 120:
+        return jsonify({"error": "full_name too long (max 120)"}), 400
+    if len(phone) > 60:
+        return jsonify({"error": "phone too long (max 60)"}), 400
+    if len(address) > 240:
+        return jsonify({"error": "address too long (max 240)"}), 400
+
+    hardware_total_ars = (
+        plug_qty * _CHECKOUT_METER_PRICES["plug"]
+        + panel_qty * _CHECKOUT_METER_PRICES["panel"]
+    ) * 100  # store as centavos
+    total_ars = plan_price_ars + hardware_total_ars
+
+    with get_con(_db_path()) as con:
+        cur = con.execute(
+            """
+            INSERT INTO checkout_requests (
+                plan,
+                plan_price_ars,
+                max_meters,
+                plug_qty,
+                panel_qty,
+                hardware_total_ars,
+                total_ars,
+                buyer_full_name,
+                buyer_phone,
+                buyer_email,
+                buyer_document_type,
+                buyer_document_number,
+                buyer_address,
+                property_type
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                plan,
+                plan_price_ars,
+                max_meters,
+                plug_qty,
+                panel_qty,
+                hardware_total_ars,
+                total_ars,
+                full_name,
+                phone,
+                email,
+                document_type,
+                doc_digits,
+                address,
+                property_type,
+            ),
+        )
+        request_id = int(cur.lastrowid or 0)
+
+    return jsonify({
+        "ok": True,
+        "request_id": request_id,
+        "plan": plan,
+        "meters_total": total_meters,
+    }), 201
 
 # ---------------------------
 # ADMIN (Supabase users)
@@ -764,6 +1013,10 @@ def create_device():
     if owner_error:
         return owner_error
 
+    owner_plan, owner_plan_error = _resolve_owner_plan(user, owner_user_id)
+    if owner_plan_error:
+        return owner_plan_error
+
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "").strip()
     try:
@@ -778,12 +1031,32 @@ def create_device():
     if threshold < 0:
         return jsonify({"error": "monthly_threshold_wh must be >= 0"}), 400
 
+    max_devices = _plan_device_limit(owner_plan)
+
     api_key = secrets.token_hex(16)
     owner_email = (user.get("email") or "").strip() or None
     if owner_user_id != str(user.get("id") or ""):
         owner_email = None
 
     with get_con(_db_path()) as con:
+        if max_devices is not None:
+            row = con.execute(
+                """
+                SELECT COUNT(*) AS total
+                FROM devices
+                WHERE owner_user_id = ?
+                """,
+                (owner_user_id,),
+            ).fetchone()
+            total_devices = int(row["total"] or 0) if row else 0
+            if total_devices >= max_devices:
+                return jsonify({
+                    "error": (
+                        f"Plan {owner_plan.capitalize()} allows up to {max_devices} "
+                        f"device(s) per account"
+                    )
+                }), 403
+
         cur = con.execute(
             """
             INSERT INTO devices(name, api_key, owner_user_id, owner_email, monthly_threshold_wh)
@@ -993,6 +1266,14 @@ def summary_month():
     if not month or len(month) != 7:
         return jsonify({"error": "month must be YYYY-MM"}), 400
 
+    owner_plan, owner_plan_error = _resolve_owner_plan(user, owner_user_id)
+    if owner_plan_error:
+        return owner_plan_error
+
+    history_error = _enforce_month_history_limit(owner_plan, month)
+    if history_error:
+        return history_error
+
     device_id = request.args.get("device_id", type=int)
 
     # Query base: stats por dispositivo (LEFT JOIN para incluir devices sin mediciones)
@@ -1137,6 +1418,14 @@ def metrics_daily():
         return jsonify({"error": "from must be YYYY-MM-DD"}), 400
     if not date_to or len(date_to) != 10:
         return jsonify({"error": "to must be YYYY-MM-DD"}), 400
+
+    owner_plan, owner_plan_error = _resolve_owner_plan(user, owner_user_id)
+    if owner_plan_error:
+        return owner_plan_error
+
+    history_error = _enforce_date_history_limit(owner_plan, date_from, date_to)
+    if history_error:
+        return history_error
 
     with get_con(_db_path()) as con:
         owns_device = con.execute(

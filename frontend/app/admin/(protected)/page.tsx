@@ -351,14 +351,6 @@ export default function AdminPage() {
     }
   }
 
-  async function saveUserName(userId: string) {
-    const fullName = (draftNames[userId] || "").trim();
-    const currentUser = users.find((u) => u.id === userId);
-    const currentName = (currentUser?.full_name || "").trim();
-    if (fullName === currentName) return;
-    await updateUser(userId, { full_name: fullName || null });
-  }
-
   async function deleteUser(userId: string, email: string) {
     const confirmed = window.confirm(
       `¿Eliminar la cuenta ${email}? Esta acción no se puede deshacer.`
@@ -452,6 +444,11 @@ export default function AdminPage() {
     if (!user || !draft) return;
 
     const patch: UpdateUserPatch = {};
+    const nextFullName = (draftNames[userId] || "").trim() || null;
+    const currentFullName = (user.full_name || "").trim() || null;
+    if (nextFullName !== currentFullName) {
+      patch.full_name = nextFullName;
+    }
 
     const documentType = draft.document_type || null;
     if (documentType !== (user.document_type ?? null)) {
@@ -733,28 +730,7 @@ export default function AdminPage() {
                         </Td>
                         <Td>{user.email || "-"}</Td>
                         <Td>
-                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                            <input
-                              value={draftNames[user.id] ?? ""}
-                              onChange={(e) =>
-                                setDraftNames((prev) => ({ ...prev, [user.id]: e.target.value }))
-                              }
-                              disabled={busy}
-                              style={{
-                                ...inputStyle,
-                                padding: "7px 9px",
-                                fontSize: "13px",
-                              }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => saveUserName(user.id)}
-                              disabled={busy}
-                              style={secondaryActionBtnStyle}
-                            >
-                              Guardar
-                            </button>
-                          </div>
+                          {user.full_name || "-"}
                         </Td>
                         <Td>{formatDocument(user)}</Td>
                         <Td>{user.phone || "-"}</Td>
@@ -843,17 +819,15 @@ export default function AdminPage() {
                                 }}
                               >
                                 <DetailItem label="User ID" value={user.id} />
+                                <DetailItem label="Email" value={user.email || "-"} />
                                 <DetailItem
                                   label="Email confirmado"
                                   value={formatDate(user.email_confirmed_at)}
                                 />
+                                <DetailItem label="Alta" value={formatDate(user.created_at)} />
                                 <DetailItem
-                                  label="Fecha de nacimiento"
-                                  value={draft.birth_date || "-"}
-                                />
-                                <DetailItem
-                                  label="Dirección resumida"
-                                  value={formatAddress(user)}
+                                  label="Último login"
+                                  value={formatDate(user.last_sign_in_at)}
                                 />
                               </div>
 
@@ -865,6 +839,19 @@ export default function AdminPage() {
                                   gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
                                 }}
                               >
+                                <div>
+                                  <div style={fieldLabelStyle}>Nombre completo</div>
+                                  <input
+                                    value={draftNames[user.id] ?? ""}
+                                    onChange={(e) =>
+                                      setDraftNames((prev) => ({ ...prev, [user.id]: e.target.value }))
+                                    }
+                                    disabled={busy}
+                                    placeholder="Nombre completo"
+                                    style={inputStyle}
+                                  />
+                                </div>
+
                                 <div>
                                   <div style={fieldLabelStyle}>Tipo de documento</div>
                                   <select
