@@ -81,7 +81,7 @@ export default function CarritoPage() {
 
   function setMeterQty(type: MeterType, qtyInput: number) {
     if (!cart.plan) {
-      setNotice("Primero selecciona un plan en el Paso 1.");
+      setNotice("Primero seleccioná un plan en el Paso 1.");
       return;
     }
 
@@ -157,9 +157,9 @@ export default function CarritoPage() {
       >
         <div style={{ display: "grid", gap: "16px" }}>
           <section style={boxStyle}>
-            <h2 style={{ marginTop: 0, marginBottom: "10px" }}>Paso 1: Selecciona tu plan</h2>
+            <h2 style={{ marginTop: 0, marginBottom: "10px" }}>Paso 1: Seleccioná tu plan</h2>
             <p style={{ marginTop: 0, color: "#64748b", fontSize: "14px" }}>
-              Compara rapidamente y selecciona el plan antes de elegir medidores.
+              Compará rápidamente y seleccioná el plan antes de elegir medidores.
             </p>
 
             <div
@@ -192,7 +192,7 @@ export default function CarritoPage() {
                       {plan.summary}
                     </p>
                     <ul style={{ margin: 0, paddingLeft: "18px", color: "#334155", lineHeight: 1.6 }}>
-                      <li>{plan.maxMeters} medidor(es) maximo</li>
+                      <li>{plan.maxMeters} medidor(es) máximo</li>
                       <li>Historial {plan.historyMonths} meses</li>
                       <li>{plan.dashboard}</li>
                       <li>Alertas {plan.alerts.toLowerCase()}</li>
@@ -219,7 +219,7 @@ export default function CarritoPage() {
             ) : (
               <>
                 <p style={{ marginTop: 0, color: "#64748b" }}>
-                  Plan {PLAN_CONFIG[cart.plan].label}: puedes agregar hasta {maxMeters} medidor(es).
+                  Plan {PLAN_CONFIG[cart.plan].label}: podés agregar hasta {maxMeters} medidor(es).
                 </p>
 
                 <div style={{ display: "grid", gap: "12px" }}>
@@ -287,7 +287,7 @@ export default function CarritoPage() {
             <strong>{cart.plan ? PLAN_CONFIG[cart.plan].label : "Sin seleccionar"}</strong>
           </div>
           <div style={summaryRow}>
-            <span>Maximo medidores</span>
+            <span>Máximo medidores</span>
             <strong>{cart.plan ? maxMeters : "-"}</strong>
           </div>
           <div style={summaryRow}>
@@ -308,7 +308,7 @@ export default function CarritoPage() {
           <hr style={{ border: 0, borderTop: "1px solid #e2e8f0", margin: "12px 0" }} />
 
           <div style={summaryRow}>
-            <span>Suscripcion mensual</span>
+            <span>Suscripción mensual</span>
             <strong>{money(planPrice)}</strong>
           </div>
           <div style={summaryRow}>
@@ -327,7 +327,7 @@ export default function CarritoPage() {
               onClick={(e) => {
                 if (!canContinue) {
                   e.preventDefault();
-                  setNotice("Selecciona plan y al menos 1 medidor para continuar al Paso 3.");
+                  setNotice("Seleccioná un plan y al menos 1 medidor para continuar al Paso 3.");
                 }
               }}
             >

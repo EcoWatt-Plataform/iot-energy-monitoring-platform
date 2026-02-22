@@ -256,6 +256,14 @@ _CHECKOUT_METER_PRICES: dict[str, int] = {
     "panel": 18000,
 }
 
+# Simple sliding-window rate limiter for the public checkout endpoint.
+# Limits each IP to _CHECKOUT_RATE_LIMIT requests per _CHECKOUT_RATE_WINDOW seconds.
+_CHECKOUT_RATE_LIMIT = 5
+_CHECKOUT_RATE_WINDOW = 60  # seconds
+_CHECKOUT_MAX_IPS = 10000   # evict expired entries when dict exceeds this size
+_checkout_ip_timestamps: dict[str, list[float]] = {}
+_checkout_rate_lock = threading.Lock()
+
 
 def _normalize_plan(value: object) -> str:
     """Return canonical plan name from a raw metadata value."""
@@ -319,6 +327,8 @@ def _plan_device_limit(plan: str) -> int | None:
         return 1
     if plan == "avanzado":
         return 3
+    if plan == "premium":
+        return 6
     return None
 
 
@@ -477,6 +487,25 @@ def api_health():
 
 @api_bp.post("/checkout/request")
 def create_checkout_request():
+    # Rate limit by client IP (5 requests per 60 seconds).
+    # Use X-Real-IP (set by nginx, not spoofable by clients) then remote_addr.
+    client_ip = (request.headers.get("X-Real-IP") or request.remote_addr or "").strip() or "unknown"
+    now = time.time()
+    with _checkout_rate_lock:
+        timestamps = _checkout_ip_timestamps.get(client_ip, [])
+        timestamps = [t for t in timestamps if now - t < _CHECKOUT_RATE_WINDOW]
+        if len(timestamps) >= _CHECKOUT_RATE_LIMIT:
+            _checkout_ip_timestamps[client_ip] = timestamps
+            return jsonify({"error": "too many requests, please try again later"}), 429
+        timestamps.append(now)
+        _checkout_ip_timestamps[client_ip] = timestamps
+        # Evict fully-expired entries to prevent unbounded memory growth.
+        if len(_checkout_ip_timestamps) > _CHECKOUT_MAX_IPS:
+            expired = [ip for ip, ts in _checkout_ip_timestamps.items()
+                       if not any(now - t < _CHECKOUT_RATE_WINDOW for t in ts)]
+            for ip in expired:
+                del _checkout_ip_timestamps[ip]
+
     data = request.get_json(silent=True) or {}
     if not isinstance(data, dict):
         return jsonify({"error": "invalid JSON payload"}), 400
@@ -487,7 +516,7 @@ def create_checkout_request():
     plan = raw_plan
     plan_rule = _CHECKOUT_PLAN_RULES[plan]
     max_meters = int(plan_rule["max_meters"])
-    plan_price_ars = float(plan_rule["plan_price_ars"])
+    plan_price_ars = int(plan_rule["plan_price_ars"]) * 100  # store as centavos
 
     meters = data.get("meters") or {}
     if not isinstance(meters, dict):
@@ -553,7 +582,7 @@ def create_checkout_request():
     hardware_total_ars = (
         plug_qty * _CHECKOUT_METER_PRICES["plug"]
         + panel_qty * _CHECKOUT_METER_PRICES["panel"]
-    )
+    ) * 100  # store as centavos
     total_ars = plan_price_ars + hardware_total_ars
 
     with get_con(_db_path()) as con:

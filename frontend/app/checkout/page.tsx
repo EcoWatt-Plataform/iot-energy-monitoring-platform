@@ -71,19 +71,19 @@ export default function CheckoutPage() {
       return "Falta completar el Paso 1 y Paso 2 en el carrito.";
     }
 
-    if (!form.fullName.trim()) return "Completa nombre y apellido.";
-    if (!form.phone.trim()) return "Completa telefono.";
-    if (!form.email.trim()) return "Completa email.";
-    if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) return "El email no es valido.";
-    if (!form.documentNumber.trim()) return "Completa DNI o CUIT.";
-    if (!form.address.trim()) return "Completa direccion.";
+    if (!form.fullName.trim()) return "Completá nombre y apellido.";
+    if (!form.phone.trim()) return "Completá teléfono.";
+    if (!form.email.trim()) return "Completá email.";
+    if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) return "El email no es válido.";
+    if (!form.documentNumber.trim()) return "Completá DNI o CUIT.";
+    if (!form.address.trim()) return "Completá dirección.";
 
     const digits = form.documentNumber.replace(/\D/g, "");
     if (form.documentType === "dni" && (digits.length < 7 || digits.length > 10)) {
-      return "El DNI debe tener entre 7 y 10 digitos.";
+      return "El DNI debe tener entre 7 y 10 dígitos.";
     }
     if (form.documentType === "cuit" && digits.length !== 11) {
-      return "El CUIT debe tener 11 digitos.";
+      return "El CUIT debe tener 11 dígitos.";
     }
 
     return null;
@@ -101,7 +101,7 @@ export default function CheckoutPage() {
     }
 
     if (!cart.plan) {
-      setErrorMessage("No se encontro plan seleccionado.");
+      setErrorMessage("No se encontró plan seleccionado.");
       return;
     }
 
@@ -180,7 +180,7 @@ export default function CheckoutPage() {
 
       {!hasValidCart ? (
         <section style={panel}>
-          <h2 style={{ marginTop: 0 }}>No hay seleccion de compra</h2>
+          <h2 style={{ marginTop: 0 }}>No hay selección de compra</h2>
           <p style={{ color: "#64748b" }}>
             Antes de enviar el formulario, completa el Paso 1 y Paso 2 en el carrito.
           </p>
@@ -209,7 +209,7 @@ export default function CheckoutPage() {
               />
             </Field>
 
-            <Field label="Telefono">
+            <Field label="Teléfono">
               <input
                 value={form.phone}
                 onChange={(e) => patchForm("phone", e.target.value)}
@@ -239,7 +239,7 @@ export default function CheckoutPage() {
                 </select>
               </Field>
 
-              <Field label="Numero">
+              <Field label="Número">
                 <input
                   value={form.documentNumber}
                   onChange={(e) => patchForm("documentNumber", e.target.value)}
@@ -249,7 +249,7 @@ export default function CheckoutPage() {
               </Field>
             </div>
 
-            <Field label="Direccion">
+            <Field label="Dirección">
               <input
                 value={form.address}
                 onChange={(e) => patchForm("address", e.target.value)}
@@ -313,7 +313,7 @@ export default function CheckoutPage() {
             <hr style={{ border: 0, borderTop: "1px solid #e2e8f0", margin: "12px 0" }} />
 
             <div style={lineItem}>
-              <span>Suscripcion mensual</span>
+              <span>Suscripción mensual</span>
               <strong>{money(summary.planPrice)}</strong>
             </div>
             <div style={lineItem}>
