@@ -71,19 +71,19 @@ export default function CheckoutPage() {
       return "Falta completar el Paso 1 y Paso 2 en el carrito.";
     }
 
-    if (!form.fullName.trim()) return "Completá nombre y apellido.";
-    if (!form.phone.trim()) return "Completá teléfono.";
-    if (!form.email.trim()) return "Completá email.";
-    if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) return "El email no es válido.";
-    if (!form.documentNumber.trim()) return "Completá DNI o CUIT.";
-    if (!form.address.trim()) return "Completá dirección.";
+    if (!form.fullName.trim()) return "Completa nombre y apellido.";
+    if (!form.phone.trim()) return "Completa telefono.";
+    if (!form.email.trim()) return "Completa email.";
+    if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) return "El email no es valido.";
+    if (!form.documentNumber.trim()) return "Completa DNI o CUIT.";
+    if (!form.address.trim()) return "Completa direccion.";
 
     const digits = form.documentNumber.replace(/\D/g, "");
     if (form.documentType === "dni" && (digits.length < 7 || digits.length > 10)) {
-      return "El DNI debe tener entre 7 y 10 dígitos.";
+      return "El DNI debe tener entre 7 y 10 digitos.";
     }
     if (form.documentType === "cuit" && digits.length !== 11) {
-      return "El CUIT debe tener 11 dígitos.";
+      return "El CUIT debe tener 11 digitos.";
     }
 
     return null;
@@ -101,7 +101,7 @@ export default function CheckoutPage() {
     }
 
     if (!cart.plan) {
-      setErrorMessage("No se encontró plan seleccionado.");
+      setErrorMessage("No se encontro plan seleccionado.");
       return;
     }
 
@@ -109,7 +109,9 @@ export default function CheckoutPage() {
       plan: cart.plan,
       meters: {
         plug: cart.meters.plug,
-        panel: cart.meters.panel,
+        panel_1f: cart.meters.panel_1f,
+        panel_3f: cart.meters.panel_3f,
+        extra_phase: cart.meters.extra_phase,
       },
       buyer: {
         full_name: form.fullName.trim(),
@@ -145,7 +147,7 @@ export default function CheckoutPage() {
       clearCheckoutDraft();
       clearPurchaseCart();
       setForm({ ...DEFAULT_BUYER_FORM });
-      setCart({ plan: null, meters: { plug: 0, panel: 0 } });
+      setCart({ plan: null, meters: { plug: 0, panel_1f: 0, panel_3f: 0, extra_phase: 0 } });
     } catch (error: unknown) {
       setErrorMessage(error instanceof Error ? error.message : "No se pudo enviar la solicitud.");
     } finally {
@@ -180,7 +182,7 @@ export default function CheckoutPage() {
 
       {!hasValidCart ? (
         <section style={panel}>
-          <h2 style={{ marginTop: 0 }}>No hay selección de compra</h2>
+          <h2 style={{ marginTop: 0 }}>No hay seleccion de compra</h2>
           <p style={{ color: "#64748b" }}>
             Antes de enviar el formulario, completa el Paso 1 y Paso 2 en el carrito.
           </p>
@@ -209,7 +211,7 @@ export default function CheckoutPage() {
               />
             </Field>
 
-            <Field label="Teléfono">
+            <Field label="Telefono">
               <input
                 value={form.phone}
                 onChange={(e) => patchForm("phone", e.target.value)}
@@ -239,7 +241,7 @@ export default function CheckoutPage() {
                 </select>
               </Field>
 
-              <Field label="Número">
+              <Field label="Numero">
                 <input
                   value={form.documentNumber}
                   onChange={(e) => patchForm("documentNumber", e.target.value)}
@@ -249,7 +251,7 @@ export default function CheckoutPage() {
               </Field>
             </div>
 
-            <Field label="Dirección">
+            <Field label="Direccion">
               <input
                 value={form.address}
                 onChange={(e) => patchForm("address", e.target.value)}
@@ -300,9 +302,21 @@ export default function CheckoutPage() {
               </strong>
             </div>
             <div style={lineItem}>
-              <span>EcoWatt Panel</span>
+              <span>EcoWatt Panel 1F</span>
               <strong>
-                {cart.meters.panel} x {money(METER_PRODUCTS.panel.price)}
+                {cart.meters.panel_1f} x {money(METER_PRODUCTS.panel_1f.price)}
+              </strong>
+            </div>
+            <div style={lineItem}>
+              <span>EcoWatt Panel 3F</span>
+              <strong>
+                {cart.meters.panel_3f} x {money(METER_PRODUCTS.panel_3f.price)}
+              </strong>
+            </div>
+            <div style={lineItem}>
+              <span>Fase extra</span>
+              <strong>
+                {cart.meters.extra_phase} x {money(METER_PRODUCTS.extra_phase.price)}
               </strong>
             </div>
             <div style={lineItem}>
@@ -313,7 +327,7 @@ export default function CheckoutPage() {
             <hr style={{ border: 0, borderTop: "1px solid #e2e8f0", margin: "12px 0" }} />
 
             <div style={lineItem}>
-              <span>Suscripción mensual</span>
+              <span>Suscripcion mensual</span>
               <strong>{money(summary.planPrice)}</strong>
             </div>
             <div style={lineItem}>

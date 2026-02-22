@@ -246,14 +246,16 @@ _PLAN_ALIASES: dict[str, str] = {
 _PLAN_METADATA_KEYS = ("plan", "subscription_plan", "subscription", "tier", "plan_name")
 
 _CHECKOUT_PLAN_RULES: dict[str, dict[str, float | int]] = {
-    "basico": {"max_meters": 1, "plan_price_ars": 1500},
-    "avanzado": {"max_meters": 3, "plan_price_ars": 2900},
-    "premium": {"max_meters": 6, "plan_price_ars": 4500},
+    "basico": {"max_meters": 1, "plan_price_ars": 7900},
+    "avanzado": {"max_meters": 3, "plan_price_ars": 12900},
+    "premium": {"max_meters": 6, "plan_price_ars": 19900},
 }
 
 _CHECKOUT_METER_PRICES: dict[str, int] = {
-    "plug": 12000,
-    "panel": 18000,
+    "plug": 49900,
+    "panel_1f": 149900,
+    "panel_3f": 219900,
+    "extra_phase": 34900,
 }
 
 # Simple sliding-window rate limiter for the public checkout endpoint.
@@ -524,13 +526,21 @@ def create_checkout_request():
 
     try:
         plug_qty = int(meters.get("plug", 0))
-        panel_qty = int(meters.get("panel", 0))
+        panel_1f_qty = int(meters.get("panel_1f", meters.get("panel", 0)))
+        panel_3f_qty = int(meters.get("panel_3f", 0))
+        extra_phase_qty = int(meters.get("extra_phase", 0))
     except (TypeError, ValueError):
         return jsonify({"error": "meters quantities must be integers"}), 400
 
-    if plug_qty < 0 or panel_qty < 0:
+    if (
+        plug_qty < 0
+        or panel_1f_qty < 0
+        or panel_3f_qty < 0
+        or extra_phase_qty < 0
+    ):
         return jsonify({"error": "meters quantities must be >= 0"}), 400
 
+    panel_qty = panel_1f_qty + panel_3f_qty
     total_meters = plug_qty + panel_qty
     if total_meters <= 0:
         return jsonify({"error": "at least one meter is required"}), 400
@@ -538,6 +548,8 @@ def create_checkout_request():
         return jsonify({
             "error": f"plan {plan} allows up to {max_meters} meter(s)"
         }), 400
+    if extra_phase_qty > 0 and panel_qty <= 0:
+        return jsonify({"error": "extra_phase requires at least one panel meter"}), 400
 
     buyer = data.get("buyer") or {}
     if not isinstance(buyer, dict):
@@ -581,7 +593,9 @@ def create_checkout_request():
 
     hardware_total_ars = (
         plug_qty * _CHECKOUT_METER_PRICES["plug"]
-        + panel_qty * _CHECKOUT_METER_PRICES["panel"]
+        + panel_1f_qty * _CHECKOUT_METER_PRICES["panel_1f"]
+        + panel_3f_qty * _CHECKOUT_METER_PRICES["panel_3f"]
+        + extra_phase_qty * _CHECKOUT_METER_PRICES["extra_phase"]
     ) * 100  # store as centavos
     total_ars = plan_price_ars + hardware_total_ars
 
@@ -594,6 +608,9 @@ def create_checkout_request():
                 max_meters,
                 plug_qty,
                 panel_qty,
+                panel_1f_qty,
+                panel_3f_qty,
+                extra_phase_qty,
                 hardware_total_ars,
                 total_ars,
                 buyer_full_name,
@@ -604,7 +621,7 @@ def create_checkout_request():
                 buyer_address,
                 property_type
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 plan,
@@ -612,6 +629,9 @@ def create_checkout_request():
                 max_meters,
                 plug_qty,
                 panel_qty,
+                panel_1f_qty,
+                panel_3f_qty,
+                extra_phase_qty,
                 hardware_total_ars,
                 total_ars,
                 full_name,

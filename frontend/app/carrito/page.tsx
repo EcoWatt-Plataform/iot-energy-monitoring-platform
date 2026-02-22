@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
+  type MeterCountType,
   type MeterType,
   type PlanId,
+  METER_COUNT_TYPES,
   METER_PRODUCTS,
   PLAN_CONFIG,
   getPlanMaxMeters,
@@ -40,6 +42,12 @@ function initialCart(): ReturnType<typeof readPurchaseCart> {
   return writePurchaseCart(normalizeCart({ ...base, plan: fromQuery }));
 }
 
+function isCountableMeter(type: MeterType): type is MeterCountType {
+  return (METER_COUNT_TYPES as MeterType[]).includes(type);
+}
+
+const METER_ORDER: MeterType[] = ["plug", "panel_1f", "panel_3f", "extra_phase"];
+
 export default function CarritoPage() {
   const [cart, setCart] = useState(() => initialCart());
   const [isMobile, setIsMobile] = useState(false);
@@ -47,6 +55,7 @@ export default function CarritoPage() {
 
   const maxMeters = getPlanMaxMeters(cart.plan);
   const selectedMeters = totalMeters(cart.meters);
+  const selectedPanels = cart.meters.panel_1f + cart.meters.panel_3f;
   const canContinue = Boolean(cart.plan) && selectedMeters > 0;
 
   useEffect(() => {
@@ -76,41 +85,62 @@ export default function CarritoPage() {
 
   function clearSelection() {
     setNotice(null);
-    updateCart({ plan: cart.plan, meters: { plug: 0, panel: 0 } });
+    updateCart({ plan: cart.plan, meters: { plug: 0, panel_1f: 0, panel_3f: 0, extra_phase: 0 } });
   }
 
   function setMeterQty(type: MeterType, qtyInput: number) {
     if (!cart.plan) {
-      setNotice("Primero seleccioná un plan en el Paso 1.");
+      setNotice("Primero selecciona un plan en el Paso 1.");
       return;
     }
 
-    const max = PLAN_CONFIG[cart.plan].maxMeters;
     const qty = Math.max(0, Math.floor(Number.isFinite(qtyInput) ? qtyInput : 0));
+    const rawNext = {
+      ...cart,
+      meters: {
+        ...cart.meters,
+        [type]: qty,
+      },
+    };
 
-    const nextMeters = { ...cart.meters, [type]: qty };
-    const total = totalMeters(nextMeters);
+    if (type === "extra_phase") {
+      const panelCount = rawNext.meters.panel_1f + rawNext.meters.panel_3f;
+      if (qty > 0 && panelCount <= 0) {
+        setNotice("La fase extra requiere al menos un EcoWatt Panel (1F o 3F).");
+        return;
+      }
+      setNotice(null);
+      updateCart(rawNext);
+      return;
+    }
 
-    if (total > max) {
-      const otherType: MeterType = type === "plug" ? "panel" : "plug";
-      const overflow = total - max;
-      nextMeters[otherType] = Math.max(0, nextMeters[otherType] - overflow);
+    const normalized = normalizeCart(rawNext);
+    if (totalMeters(rawNext.meters) > maxMeters) {
       setNotice(
-        `Tu plan ${PLAN_CONFIG[cart.plan].label} permite hasta ${max} medidor(es).`
+        `Tu plan ${PLAN_CONFIG[cart.plan].label} permite hasta ${maxMeters} medidor(es).`
       );
     } else {
       setNotice(null);
     }
 
-    updateCart({ ...cart, meters: nextMeters });
+    if (normalized.meters.extra_phase > 0) {
+      const panelCount = normalized.meters.panel_1f + normalized.meters.panel_3f;
+      if (panelCount <= 0) {
+        normalized.meters.extra_phase = 0;
+      }
+    }
+
+    updateCart(normalized);
   }
 
   const meterRows = useMemo(() => {
-    return (Object.keys(METER_PRODUCTS) as MeterType[]).map((type) => {
+    return METER_ORDER.map((type) => {
       const product = METER_PRODUCTS[type];
       const qty = cart.meters[type];
       const subtotal = qty * product.price;
-      const disablePlus = !cart.plan || selectedMeters >= maxMeters;
+      const disablePlus = isCountableMeter(type)
+        ? !cart.plan || selectedMeters >= maxMeters
+        : selectedPanels <= 0;
 
       return {
         type,
@@ -120,19 +150,19 @@ export default function CarritoPage() {
         disablePlus,
       };
     });
-  }, [cart.meters, cart.plan, selectedMeters, maxMeters]);
+  }, [cart.meters, cart.plan, selectedMeters, maxMeters, selectedPanels]);
 
   const planPrice = cart.plan ? PLAN_CONFIG[cart.plan].monthlyPrice : 0;
   const hardwareTotal = meterHardwareTotal(cart.meters);
   const total = overallTotal(cart);
 
   return (
-    <div style={{ maxWidth: "1140px", margin: "0 auto", padding: isMobile ? "18px" : "36px" }}>
+    <div style={{ maxWidth: "1160px", margin: "0 auto", padding: isMobile ? "18px" : "36px" }}>
       <h1 style={{ marginTop: 0, marginBottom: "8px", fontSize: isMobile ? "28px" : "40px" }}>
         Proceso de compra
       </h1>
       <p style={{ marginTop: 0, color: "#475569", marginBottom: "18px" }}>
-        Paso 1: elige plan. Paso 2: define medidores EcoWatt Plug o EcoWatt Panel.
+        Paso 1: selecciona plan SaaS. Paso 2: elige medidores (tipo Plug o Panel).
       </p>
 
       <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "18px" }}>
@@ -141,32 +171,28 @@ export default function CarritoPage() {
         <span style={stepBadge}>Paso 3: Datos</span>
       </div>
 
-      {notice && (
-        <div style={noticeStyle}>
-          {notice}
-        </div>
-      )}
+      {notice && <div style={noticeStyle}>{notice}</div>}
 
       <div
         style={{
           display: "grid",
           gap: "16px",
-          gridTemplateColumns: isMobile ? "1fr" : "1fr 340px",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 360px",
           alignItems: "start",
         }}
       >
         <div style={{ display: "grid", gap: "16px" }}>
           <section style={boxStyle}>
-            <h2 style={{ marginTop: 0, marginBottom: "10px" }}>Paso 1: Seleccioná tu plan</h2>
+            <h2 style={{ marginTop: 0, marginBottom: "10px" }}>Paso 1: Selecciona tu plan</h2>
             <p style={{ marginTop: 0, color: "#64748b", fontSize: "14px" }}>
-              Compará rápidamente y seleccioná el plan antes de elegir medidores.
+              Comparacion breve de planes mensuales (solo servicio SaaS).
             </p>
 
             <div
               style={{
                 display: "grid",
                 gap: "12px",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
               }}
             >
               {(Object.keys(PLAN_CONFIG) as PlanId[]).map((planId) => {
@@ -184,18 +210,19 @@ export default function CarritoPage() {
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
                       <strong style={{ fontSize: "18px" }}>{plan.label}</strong>
-                      {active && (
-                        <span style={selectedChip}>Seleccionado</span>
-                      )}
+                      {active && <span style={selectedChip}>Seleccionado</span>}
+                    </div>
+                    <div style={{ marginTop: "6px", fontWeight: 800, color: "#0f172a" }}>
+                      {money(plan.monthlyPrice)}/mes
                     </div>
                     <p style={{ color: "#475569", marginTop: "8px", marginBottom: "10px", fontSize: "14px" }}>
                       {plan.summary}
                     </p>
                     <ul style={{ margin: 0, paddingLeft: "18px", color: "#334155", lineHeight: 1.6 }}>
-                      <li>{plan.maxMeters} medidor(es) máximo</li>
-                      <li>Historial {plan.historyMonths} meses</li>
+                      <li>Hasta {plan.maxMeters} medidor(es)</li>
+                      <li>Historial: {plan.history}</li>
                       <li>{plan.dashboard}</li>
-                      <li>Alertas {plan.alerts.toLowerCase()}</li>
+                      <li>Exportaciones: {plan.exports}</li>
                     </ul>
                     <button
                       type="button"
@@ -219,7 +246,10 @@ export default function CarritoPage() {
             ) : (
               <>
                 <p style={{ marginTop: 0, color: "#64748b" }}>
-                  Plan {PLAN_CONFIG[cart.plan].label}: podés agregar hasta {maxMeters} medidor(es).
+                  Plan {PLAN_CONFIG[cart.plan].label}: maximo {maxMeters} medidor(es).
+                </p>
+                <p style={{ marginTop: 0, color: "#64748b", fontSize: "13px" }}>
+                  Tipos principales: EcoWatt Plug o EcoWatt Panel. Panel disponible en 1F y 3F.
                 </p>
 
                 <div style={{ display: "grid", gap: "12px" }}>
@@ -255,7 +285,7 @@ export default function CarritoPage() {
                         <input
                           type="number"
                           min={0}
-                          max={maxMeters}
+                          max={meter.countsAsMeter ? maxMeters : 99}
                           value={meter.qty}
                           onChange={(e) => setMeterQty(meter.type, Number(e.target.value))}
                           style={qtyInput}
@@ -287,11 +317,11 @@ export default function CarritoPage() {
             <strong>{cart.plan ? PLAN_CONFIG[cart.plan].label : "Sin seleccionar"}</strong>
           </div>
           <div style={summaryRow}>
-            <span>Máximo medidores</span>
+            <span>Capacidad del plan</span>
             <strong>{cart.plan ? maxMeters : "-"}</strong>
           </div>
           <div style={summaryRow}>
-            <span>Seleccionados</span>
+            <span>Medidores seleccionados</span>
             <strong>
               {selectedMeters}{cart.plan ? ` / ${maxMeters}` : ""}
             </strong>
@@ -301,14 +331,22 @@ export default function CarritoPage() {
             <strong>{cart.meters.plug}</strong>
           </div>
           <div style={summaryRow}>
-            <span>EcoWatt Panel</span>
-            <strong>{cart.meters.panel}</strong>
+            <span>EcoWatt Panel 1F</span>
+            <strong>{cart.meters.panel_1f}</strong>
+          </div>
+          <div style={summaryRow}>
+            <span>EcoWatt Panel 3F</span>
+            <strong>{cart.meters.panel_3f}</strong>
+          </div>
+          <div style={summaryRow}>
+            <span>Fase extra</span>
+            <strong>{cart.meters.extra_phase}</strong>
           </div>
 
           <hr style={{ border: 0, borderTop: "1px solid #e2e8f0", margin: "12px 0" }} />
 
           <div style={summaryRow}>
-            <span>Suscripción mensual</span>
+            <span>Suscripcion mensual</span>
             <strong>{money(planPrice)}</strong>
           </div>
           <div style={summaryRow}>
@@ -327,7 +365,7 @@ export default function CarritoPage() {
               onClick={(e) => {
                 if (!canContinue) {
                   e.preventDefault();
-                  setNotice("Seleccioná un plan y al menos 1 medidor para continuar al Paso 3.");
+                  setNotice("Selecciona un plan y al menos 1 medidor para continuar al Paso 3.");
                 }
               }}
             >

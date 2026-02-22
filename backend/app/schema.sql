@@ -35,6 +35,9 @@ CREATE TABLE IF NOT EXISTS checkout_requests (
   max_meters INTEGER NOT NULL,
   plug_qty INTEGER NOT NULL,
   panel_qty INTEGER NOT NULL,
+  panel_1f_qty INTEGER NOT NULL DEFAULT 0,
+  panel_3f_qty INTEGER NOT NULL DEFAULT 0,
+  extra_phase_qty INTEGER NOT NULL DEFAULT 0,
   hardware_total_ars INTEGER NOT NULL,     -- ARS * 100 (centavos)
   total_ars INTEGER NOT NULL,              -- ARS * 100 (centavos)
   buyer_full_name TEXT NOT NULL,

@@ -30,6 +30,33 @@ def _migrate_db(con: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_devices_owner_user_id ON devices(owner_user_id)"
     )
 
+    has_checkout_requests = con.execute(
+        """
+        SELECT 1
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'checkout_requests'
+        """
+    ).fetchone()
+
+    if has_checkout_requests:
+        checkout_cols = {
+            row[1]
+            for row in con.execute("PRAGMA table_info(checkout_requests)").fetchall()
+        }
+
+        if "panel_1f_qty" not in checkout_cols:
+            con.execute(
+                "ALTER TABLE checkout_requests ADD COLUMN panel_1f_qty INTEGER NOT NULL DEFAULT 0"
+            )
+        if "panel_3f_qty" not in checkout_cols:
+            con.execute(
+                "ALTER TABLE checkout_requests ADD COLUMN panel_3f_qty INTEGER NOT NULL DEFAULT 0"
+            )
+        if "extra_phase_qty" not in checkout_cols:
+            con.execute(
+                "ALTER TABLE checkout_requests ADD COLUMN extra_phase_qty INTEGER NOT NULL DEFAULT 0"
+            )
+
 @contextmanager
 def get_con(db_path: str):
     con = sqlite3.connect(db_path)

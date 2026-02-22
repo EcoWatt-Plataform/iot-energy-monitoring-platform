@@ -1,11 +1,14 @@
 export type PlanId = "basico" | "avanzado" | "premium";
-export type MeterType = "plug" | "panel";
+export type MeterType = "plug" | "panel_1f" | "panel_3f" | "extra_phase";
+export type MeterCountType = "plug" | "panel_1f" | "panel_3f";
 export type DocumentType = "dni" | "cuit";
 export type PropertyType = "casa" | "empresa";
 
 export type MeterSelection = {
   plug: number;
-  panel: number;
+  panel_1f: number;
+  panel_3f: number;
+  extra_phase: number;
 };
 
 export type PurchaseCart = {
@@ -41,38 +44,42 @@ export const PLAN_CONFIG: Record<
     label: string;
     monthlyPrice: number;
     maxMeters: number;
-    historyMonths: number;
+    history: string;
     dashboard: string;
     alerts: string;
+    exports: string;
     summary: string;
   }
 > = {
   basico: {
-    label: "Básico",
-    monthlyPrice: 1500,
+    label: "Basico",
+    monthlyPrice: 7900,
     maxMeters: 1,
-    historyMonths: 3,
+    history: "3 meses",
     dashboard: "Diario y mensual",
     alerts: "Simples",
-    summary: "Ideal para empezar y monitorear 1 medidor.",
+    exports: "No incluido",
+    summary: "Plan base SaaS para empezar con 1 medidor.",
   },
   avanzado: {
     label: "Avanzado",
-    monthlyPrice: 2900,
+    monthlyPrice: 12900,
     maxMeters: 3,
-    historyMonths: 12,
-    dashboard: "Diario, semanal, mensual y comparativo",
+    history: "12 meses",
+    dashboard: "Diario, semanal, mensual y comparativas",
     alerts: "Simples",
-    summary: "Incluye Básico y permite hasta 3 medidores.",
+    exports: "No incluido",
+    summary: "Incluye Basico y escala hasta 3 medidores.",
   },
   premium: {
     label: "Premium",
-    monthlyPrice: 4500,
+    monthlyPrice: 19900,
     maxMeters: 6,
-    historyMonths: 24,
+    history: "Extendido",
     dashboard: "Completo con comparativas avanzadas",
     alerts: "Avanzadas",
-    summary: "Para monitoreo intensivo con hasta 6 medidores.",
+    exports: "CSV / PDF / Excel",
+    summary: "Plan completo con exportaciones exclusivas y hasta 6 medidores.",
   },
 };
 
@@ -82,23 +89,40 @@ export const METER_PRODUCTS: Record<
     label: string;
     price: number;
     description: string;
+    countsAsMeter: boolean;
   }
 > = {
   plug: {
     label: "EcoWatt Plug",
-    price: 12000,
-    description: "Medidor enchufable para electrodomesticos individuales.",
+    price: 49900,
+    description: "Enchufable entre toma y dispositivo.",
+    countsAsMeter: true,
   },
-  panel: {
-    label: "EcoWatt Panel",
-    price: 18000,
-    description: "Medidor de tablero para circuitos completos del hogar o negocio.",
+  panel_1f: {
+    label: "EcoWatt Panel 1 fase",
+    price: 149900,
+    description: "Medidor de tablero 1F, incluye 1 pinza CT.",
+    countsAsMeter: true,
+  },
+  panel_3f: {
+    label: "EcoWatt Panel 3 fases",
+    price: 219900,
+    description: "Medidor de tablero 3F, incluye 3 pinzas CT.",
+    countsAsMeter: true,
+  },
+  extra_phase: {
+    label: "Fase extra",
+    price: 34900,
+    description: "Pinza CT adicional + configuracion.",
+    countsAsMeter: false,
   },
 };
 
+export const METER_COUNT_TYPES: MeterCountType[] = ["plug", "panel_1f", "panel_3f"];
+
 export const DEFAULT_CART: PurchaseCart = {
   plan: null,
-  meters: { plug: 0, panel: 0 },
+  meters: { plug: 0, panel_1f: 0, panel_3f: 0, extra_phase: 0 },
 };
 
 export const DEFAULT_BUYER_FORM: BuyerFormData = {
@@ -112,7 +136,11 @@ export const DEFAULT_BUYER_FORM: BuyerFormData = {
 };
 
 export function totalMeters(meters: MeterSelection): number {
-  return sanitizeQty(meters.plug) + sanitizeQty(meters.panel);
+  return (
+    sanitizeQty(meters.plug) +
+    sanitizeQty(meters.panel_1f) +
+    sanitizeQty(meters.panel_3f)
+  );
 }
 
 export function getPlanMaxMeters(plan: PlanId | null): number {
@@ -123,7 +151,9 @@ export function getPlanMaxMeters(plan: PlanId | null): number {
 export function meterHardwareTotal(meters: MeterSelection): number {
   return (
     sanitizeQty(meters.plug) * METER_PRODUCTS.plug.price +
-    sanitizeQty(meters.panel) * METER_PRODUCTS.panel.price
+    sanitizeQty(meters.panel_1f) * METER_PRODUCTS.panel_1f.price +
+    sanitizeQty(meters.panel_3f) * METER_PRODUCTS.panel_3f.price +
+    sanitizeQty(meters.extra_phase) * METER_PRODUCTS.extra_phase.price
   );
 }
 
@@ -140,27 +170,38 @@ function sanitizeQty(value: unknown): number {
 
 function clampMetersToLimit(meters: MeterSelection, maxMeters: number): MeterSelection {
   let plug = sanitizeQty(meters.plug);
-  let panel = sanitizeQty(meters.panel);
-  let total = plug + panel;
+  let panel1f = sanitizeQty(meters.panel_1f);
+  let panel3f = sanitizeQty(meters.panel_3f);
+  let extraPhase = sanitizeQty(meters.extra_phase);
 
-  if (total <= maxMeters) {
-    return { plug, panel };
-  }
-
-  let overflow = total - maxMeters;
-  const panelReduction = Math.min(panel, overflow);
-  panel -= panelReduction;
-  overflow -= panelReduction;
-  if (overflow > 0) {
-    plug = Math.max(0, plug - overflow);
-  }
-
-  total = plug + panel;
+  let total = plug + panel1f + panel3f;
   if (total > maxMeters) {
-    plug = Math.max(0, maxMeters - panel);
+    let overflow = total - maxMeters;
+
+    const reducePanel3f = Math.min(panel3f, overflow);
+    panel3f -= reducePanel3f;
+    overflow -= reducePanel3f;
+
+    const reducePanel1f = Math.min(panel1f, overflow);
+    panel1f -= reducePanel1f;
+    overflow -= reducePanel1f;
+
+    if (overflow > 0) {
+      plug = Math.max(0, plug - overflow);
+    }
   }
 
-  return { plug, panel };
+  total = plug + panel1f + panel3f;
+  if (total <= 0) {
+    extraPhase = 0;
+  }
+
+  return {
+    plug,
+    panel_1f: panel1f,
+    panel_3f: panel3f,
+    extra_phase: extraPhase,
+  };
 }
 
 export function normalizeCart(raw: unknown): PurchaseCart {
@@ -168,9 +209,8 @@ export function normalizeCart(raw: unknown): PurchaseCart {
     return { ...DEFAULT_CART, meters: { ...DEFAULT_CART.meters } };
   }
 
-  const maybeLegacy = raw as { id?: unknown; items?: unknown };
-  if (Array.isArray(maybeLegacy)) {
-    return normalizeLegacyCart(maybeLegacy);
+  if (Array.isArray(raw)) {
+    return normalizeLegacyCart(raw as unknown[]);
   }
 
   const obj = raw as { plan?: unknown; meters?: unknown };
@@ -182,17 +222,20 @@ export function normalizeCart(raw: unknown): PurchaseCart {
 
   const rawMeters =
     obj.meters && typeof obj.meters === "object"
-      ? (obj.meters as { plug?: unknown; panel?: unknown })
+      ? (obj.meters as Partial<Record<MeterType | "panel", unknown>>)
       : {};
-  const meters = {
+
+  const meters: MeterSelection = {
     plug: sanitizeQty(rawMeters.plug),
-    panel: sanitizeQty(rawMeters.panel),
+    panel_1f: sanitizeQty(rawMeters.panel_1f ?? rawMeters.panel),
+    panel_3f: sanitizeQty(rawMeters.panel_3f),
+    extra_phase: sanitizeQty(rawMeters.extra_phase),
   };
 
   const maxMeters = getPlanMaxMeters(plan);
   return {
     plan,
-    meters: plan ? clampMetersToLimit(meters, maxMeters) : { plug: 0, panel: 0 },
+    meters: plan ? clampMetersToLimit(meters, maxMeters) : { ...DEFAULT_CART.meters },
   };
 }
 
@@ -216,7 +259,10 @@ function normalizeLegacyCart(raw: unknown[]): PurchaseCart {
   }
 
   const maxMeters = getPlanMaxMeters(plan);
-  const meters = clampMetersToLimit({ plug: legacyDeviceQty, panel: 0 }, maxMeters);
+  const meters = clampMetersToLimit(
+    { plug: legacyDeviceQty, panel_1f: 0, panel_3f: 0, extra_phase: 0 },
+    maxMeters
+  );
   return { plan, meters };
 }
 
