@@ -8,14 +8,17 @@ import {
   METER_PRODUCTS,
   PLAN_CONFIG,
   clearCheckoutDraft,
+  clearCheckoutIdempotencyDraft,
   clearPurchaseCart,
   meterHardwareTotal,
   normalizeCart,
   overallTotal,
   readCheckoutDraft,
+  readCheckoutIdempotencyDraft,
   readPurchaseCart,
   totalMeters,
   writeCheckoutDraft,
+  writeCheckoutIdempotencyDraft,
 } from "@/lib/purchase";
 
 function money(n: number) {
@@ -23,6 +26,13 @@ function money(n: number) {
     style: "currency",
     currency: "ARS",
   }).format(n);
+}
+
+function createIdempotencyKey() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `checkout_${crypto.randomUUID()}`;
+  }
+  return `checkout_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
 }
 
 export default function CheckoutPage() {
@@ -105,7 +115,7 @@ export default function CheckoutPage() {
       return;
     }
 
-    const payload = {
+    const payloadBase = {
       plan: cart.plan,
       meters: {
         plug: cart.meters.plug,
@@ -122,6 +132,19 @@ export default function CheckoutPage() {
         address: form.address.trim(),
         property_type: form.propertyType,
       },
+    };
+
+    const fingerprint = JSON.stringify(payloadBase);
+    const previousIdempotency = readCheckoutIdempotencyDraft();
+    const idempotencyKey =
+      previousIdempotency && previousIdempotency.fingerprint === fingerprint
+        ? previousIdempotency.key
+        : createIdempotencyKey();
+    writeCheckoutIdempotencyDraft({ fingerprint, key: idempotencyKey });
+
+    const payload = {
+      ...payloadBase,
+      idempotency_key: idempotencyKey,
     };
 
     try {
@@ -145,6 +168,7 @@ export default function CheckoutPage() {
       setRequestId(typeof data.request_id === "number" ? data.request_id : null);
       setSuccessMessage("Formulario enviado correctamente. Te contactaremos a la brevedad.");
       clearCheckoutDraft();
+      clearCheckoutIdempotencyDraft();
       clearPurchaseCart();
       setForm({ ...DEFAULT_BUYER_FORM });
       setCart({ plan: null, meters: { plug: 0, panel_1f: 0, panel_3f: 0, extra_phase: 0 } });

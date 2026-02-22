@@ -1,5 +1,6 @@
 import json
 import secrets
+import sqlite3
 import time
 import threading
 from datetime import datetime
@@ -263,6 +264,7 @@ _CHECKOUT_METER_PRICES: dict[str, int] = {
 _CHECKOUT_RATE_LIMIT = 5
 _CHECKOUT_RATE_WINDOW = 60  # seconds
 _CHECKOUT_MAX_IPS = 10000   # evict expired entries when dict exceeds this size
+_CHECKOUT_IDEMPOTENCY_KEY_MAX_LEN = 120
 _checkout_ip_timestamps: dict[str, list[float]] = {}
 _checkout_rate_lock = threading.Lock()
 
@@ -512,6 +514,19 @@ def create_checkout_request():
     if not isinstance(data, dict):
         return jsonify({"error": "invalid JSON payload"}), 400
 
+    raw_idempotency_key = data.get("idempotency_key")
+    idempotency_key: str | None = None
+    if raw_idempotency_key is not None:
+        if not isinstance(raw_idempotency_key, str):
+            return jsonify({"error": "idempotency_key must be a string"}), 400
+        candidate = raw_idempotency_key.strip()
+        if candidate:
+            if len(candidate) > _CHECKOUT_IDEMPOTENCY_KEY_MAX_LEN:
+                return jsonify({
+                    "error": f"idempotency_key too long (max {_CHECKOUT_IDEMPOTENCY_KEY_MAX_LEN})"
+                }), 400
+            idempotency_key = candidate
+
     raw_plan = str(data.get("plan") or "").strip().lower()
     if raw_plan not in _CHECKOUT_PLAN_RULES:
         return jsonify({"error": "plan must be basico, avanzado or premium"}), 400
@@ -599,51 +614,121 @@ def create_checkout_request():
     ) * 100  # store as centavos
     total_ars = plan_price_ars + hardware_total_ars
 
-    with get_con(_db_path()) as con:
-        cur = con.execute(
-            """
-            INSERT INTO checkout_requests (
-                plan,
-                plan_price_ars,
-                max_meters,
-                plug_qty,
-                panel_qty,
-                panel_1f_qty,
-                panel_3f_qty,
-                extra_phase_qty,
-                hardware_total_ars,
-                total_ars,
-                buyer_full_name,
-                buyer_phone,
-                buyer_email,
-                buyer_document_type,
-                buyer_document_number,
-                buyer_address,
-                property_type
+    try:
+        with get_con(_db_path()) as con:
+            cur = con.execute(
+                """
+                INSERT INTO checkout_requests (
+                    plan,
+                    plan_price_ars,
+                    max_meters,
+                    plug_qty,
+                    panel_qty,
+                    panel_1f_qty,
+                    panel_3f_qty,
+                    extra_phase_qty,
+                    hardware_total_ars,
+                    total_ars,
+                    idempotency_key,
+                    buyer_full_name,
+                    buyer_phone,
+                    buyer_email,
+                    buyer_document_type,
+                    buyer_document_number,
+                    buyer_address,
+                    property_type
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    plan,
+                    plan_price_ars,
+                    max_meters,
+                    plug_qty,
+                    panel_qty,
+                    panel_1f_qty,
+                    panel_3f_qty,
+                    extra_phase_qty,
+                    hardware_total_ars,
+                    total_ars,
+                    idempotency_key,
+                    full_name,
+                    phone,
+                    email,
+                    document_type,
+                    doc_digits,
+                    address,
+                    property_type,
+                ),
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                plan,
-                plan_price_ars,
-                max_meters,
-                plug_qty,
-                panel_qty,
-                panel_1f_qty,
-                panel_3f_qty,
-                extra_phase_qty,
-                hardware_total_ars,
-                total_ars,
-                full_name,
-                phone,
-                email,
-                document_type,
-                doc_digits,
-                address,
-                property_type,
-            ),
+            request_id = int(cur.lastrowid or 0)
+    except sqlite3.IntegrityError as exc:
+        # Unique-key conflicts for idempotency retries should return the original request.
+        if not idempotency_key or "idempotency_key" not in str(exc).lower():
+            current_app.logger.exception("checkout request insert failed")
+            return jsonify({"error": "could not persist checkout request"}), 500
+
+        with get_con(_db_path()) as con:
+            row = con.execute(
+                """
+                SELECT
+                    id,
+                    plan,
+                    plan_price_ars,
+                    max_meters,
+                    plug_qty,
+                    panel_qty,
+                    panel_1f_qty,
+                    panel_3f_qty,
+                    extra_phase_qty,
+                    hardware_total_ars,
+                    total_ars,
+                    buyer_full_name,
+                    buyer_phone,
+                    buyer_email,
+                    buyer_document_type,
+                    buyer_document_number,
+                    buyer_address,
+                    property_type
+                FROM checkout_requests
+                WHERE idempotency_key = ?
+                LIMIT 1
+                """,
+                (idempotency_key,),
+            ).fetchone()
+
+        if row is None:
+            return jsonify({"error": "idempotency key conflict"}), 409
+
+        same_payload = (
+            row["plan"] == plan
+            and int(row["plan_price_ars"]) == plan_price_ars
+            and int(row["max_meters"]) == max_meters
+            and int(row["plug_qty"]) == plug_qty
+            and int(row["panel_qty"]) == panel_qty
+            and int(row["panel_1f_qty"]) == panel_1f_qty
+            and int(row["panel_3f_qty"]) == panel_3f_qty
+            and int(row["extra_phase_qty"]) == extra_phase_qty
+            and int(row["hardware_total_ars"]) == hardware_total_ars
+            and int(row["total_ars"]) == total_ars
+            and row["buyer_full_name"] == full_name
+            and row["buyer_phone"] == phone
+            and row["buyer_email"] == email
+            and row["buyer_document_type"] == document_type
+            and row["buyer_document_number"] == doc_digits
+            and row["buyer_address"] == address
+            and row["property_type"] == property_type
         )
-        request_id = int(cur.lastrowid or 0)
+        if not same_payload:
+            return jsonify({"error": "idempotency_key already used with different payload"}), 409
+
+        return jsonify({
+            "ok": True,
+            "request_id": int(row["id"]),
+            "plan": row["plan"],
+            "meters_total": int(row["plug_qty"]) + int(row["panel_qty"]),
+            "idempotent_replay": True,
+        }), 200
 
     return jsonify({
         "ok": True,

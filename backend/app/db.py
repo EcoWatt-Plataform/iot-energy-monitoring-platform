@@ -56,6 +56,18 @@ def _migrate_db(con: sqlite3.Connection) -> None:
             con.execute(
                 "ALTER TABLE checkout_requests ADD COLUMN extra_phase_qty INTEGER NOT NULL DEFAULT 0"
             )
+        if "idempotency_key" not in checkout_cols:
+            con.execute(
+                "ALTER TABLE checkout_requests ADD COLUMN idempotency_key TEXT"
+            )
+
+        con.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_checkout_requests_idempotency_key
+            ON checkout_requests(idempotency_key)
+            WHERE idempotency_key IS NOT NULL
+            """
+        )
 
 @contextmanager
 def get_con(db_path: str):

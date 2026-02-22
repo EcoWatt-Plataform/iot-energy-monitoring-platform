@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS checkout_requests (
   extra_phase_qty INTEGER NOT NULL DEFAULT 0,
   hardware_total_ars INTEGER NOT NULL,     -- ARS * 100 (centavos)
   total_ars INTEGER NOT NULL,              -- ARS * 100 (centavos)
+  idempotency_key TEXT,
   buyer_full_name TEXT NOT NULL,
   buyer_phone TEXT NOT NULL,
   buyer_email TEXT NOT NULL,
@@ -52,3 +53,7 @@ CREATE TABLE IF NOT EXISTS checkout_requests (
 
 CREATE INDEX IF NOT EXISTS idx_checkout_requests_created_at
 ON checkout_requests(created_at);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_checkout_requests_idempotency_key
+ON checkout_requests(idempotency_key)
+WHERE idempotency_key IS NOT NULL;
