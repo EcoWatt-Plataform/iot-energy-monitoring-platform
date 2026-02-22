@@ -48,7 +48,7 @@ export const PLAN_CONFIG: Record<
   }
 > = {
   basico: {
-    label: "Basico",
+    label: "Básico",
     monthlyPrice: 1500,
     maxMeters: 1,
     historyMonths: 3,
@@ -63,7 +63,7 @@ export const PLAN_CONFIG: Record<
     historyMonths: 12,
     dashboard: "Diario, semanal, mensual y comparativo",
     alerts: "Simples",
-    summary: "Incluye Basico y permite hasta 3 medidores.",
+    summary: "Incluye Básico y permite hasta 3 medidores.",
   },
   premium: {
     label: "Premium",

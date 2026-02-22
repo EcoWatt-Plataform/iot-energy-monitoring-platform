@@ -31,12 +31,12 @@ ON devices(owner_user_id);
 CREATE TABLE IF NOT EXISTS checkout_requests (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   plan TEXT NOT NULL,
-  plan_price_ars REAL NOT NULL,
+  plan_price_ars INTEGER NOT NULL,         -- ARS * 100 (centavos)
   max_meters INTEGER NOT NULL,
   plug_qty INTEGER NOT NULL,
   panel_qty INTEGER NOT NULL,
-  hardware_total_ars REAL NOT NULL,
-  total_ars REAL NOT NULL,
+  hardware_total_ars INTEGER NOT NULL,     -- ARS * 100 (centavos)
+  total_ars INTEGER NOT NULL,              -- ARS * 100 (centavos)
   buyer_full_name TEXT NOT NULL,
   buyer_phone TEXT NOT NULL,
   buyer_email TEXT NOT NULL,
