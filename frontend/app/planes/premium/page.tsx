@@ -85,7 +85,7 @@ export default function PlanPremiumPage() {
       </div>
 
       <div style={{ maxWidth: "1100px", margin: "40px auto 0" }}>
-        <h2 style={{ fontSize: "26px", marginBottom: "12px" }}>Que incluye el Plan Premium?</h2>
+        <h2 style={{ fontSize: "26px", marginBottom: "12px" }}>¿Qué incluye el Plan Premium?</h2>
 
         <div
           style={{

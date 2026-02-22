@@ -185,7 +185,7 @@ export default function CarritoPage() {
           <section style={boxStyle}>
             <h2 style={{ marginTop: 0, marginBottom: "10px" }}>Paso 1: Selecciona tu plan</h2>
             <p style={{ marginTop: 0, color: "#64748b", fontSize: "14px" }}>
-              Comparacion breve de planes mensuales (solo servicio SaaS).
+              Comparación breve de planes mensuales (solo servicio SaaS).
             </p>
 
             <div
@@ -246,7 +246,7 @@ export default function CarritoPage() {
             ) : (
               <>
                 <p style={{ marginTop: 0, color: "#64748b" }}>
-                  Plan {PLAN_CONFIG[cart.plan].label}: maximo {maxMeters} medidor(es).
+                  Plan {PLAN_CONFIG[cart.plan].label}: máximo {maxMeters} medidor(es).
                 </p>
                 <p style={{ marginTop: 0, color: "#64748b", fontSize: "13px" }}>
                   Tipos principales: EcoWatt Plug o EcoWatt Panel. Panel disponible en 1F y 3F.
