@@ -1,147 +1,210 @@
-# 📊 Sistema de Monitoreo de Consumo Energético con IoT
+# EcoWatt - Plataforma IoT de Monitoreo Energetico
 
-**Tesis de grado completa de Valentina Peirano y Tomas Sisterna para la Licenciatura en Gestión de Sistemas y Negocios**
+EcoWatt es una plataforma para monitorear consumo electrico en hogares y pymes.
+Este repositorio contiene backend, frontend, scripts de deploy y utilidades para simulacion IoT.
 
-Este proyecto desarrolla una plataforma integral para el monitoreo en tiempo real del consumo energético en hogares y pequeñas empresas. El sistema permite identificar patrones de consumo, detectar consumos anómalos y generar alertas para promover la eficiencia energética.
+## Estado actual
 
-## 🚀 Características Principales
+- Backend Flask con API REST versionada en `/api/v1`.
+- Frontend Next.js 16 (App Router) con landing, planes, carrito, checkout, dashboard y panel admin.
+- Integracion con Supabase Auth para usuarios y administradores.
+- Solicitudes de compra persistidas en SQLite con estado e idempotencia.
+- Deploy automatizado para `ecowatt.ar` con systemd + nginx + health checks.
 
-- **Monitoreo en Tiempo Real**: Visualización del consumo energético actual de múltiples dispositivos.
-- **Análisis Histórico**: Gráficos interactivos para analizar el consumo por hora, día y mes.
-- **Alertas Inteligentes**: Notificaciones automáticas cuando el consumo excede umbrales predefinidos.
-- **Gestión de Dispositivos**: Administración de dispositivos IoT y configuración de parámetros de monitoreo.
-- **Interfaz Web Responsiva**: Diseño moderno y adaptable a dispositivos móviles y de escritorio.
+## Planes SaaS (mensual, ARS)
 
-## 🛠️ Tecnologías Utilizadas
+| Plan | Precio | Max medidores | Historial | Dashboard | Alertas | Exportaciones |
+| --- | ---: | ---: | --- | --- | --- | --- |
+| Basico | 7.900/mes | 1 | 3 meses | Diario y mensual | Simples | No |
+| Avanzado | 12.900/mes | 3 | 12 meses | Diario, semanal, mensual y comparativas | Simples | No |
+| Premium | 19.900/mes | 6 | Extendido | Completo | Avanzadas | CSV/PDF/Excel |
 
-### Backend
-- **Python 3.10+**
-- **Flask**: Microframework web ligero y flexible.
-- **SQLite**: Base de datos SQL integrada (sin configuración de servidor).
-- **Werkzeug/Jinja2**: Utilidades core de Flask.
+Nota: no existe funcionalidad multiusuario por plan.
 
-### Frontend
-- **Next.js 16**: Framework de React para producción (App Router).
-- **React 19**: Librería para interfaces de usuario.
-- **Tailwind CSS v4**: Framework de utilidades CSS.
-- **TypeScript**: Tipado estático para JavaScript.
+## Hardware (venta unica, ARS)
 
-## 📂 Estructura del Proyecto
+| Producto | Precio | Detalle |
+| --- | ---: | --- |
+| EcoWatt Plug | 49.900 | Enchufable entre toma y dispositivo |
+| EcoWatt Panel 1 fase | 149.900 | Medidor de tablero 1F con 1 pinza CT |
+| EcoWatt Panel 3 fases | 219.900 | Medidor de tablero 3F con 3 pinzas CT |
+| Fase extra | 34.900 | Pinza CT adicional + configuracion |
 
+## Stack tecnico
+
+- Backend: Python 3.10+, Flask 3, SQLite, python-dotenv.
+- Frontend: Next.js 16, React 19, TypeScript, Tailwind CSS v4.
+- Auth: Supabase Auth (usuario final y admin).
+- Infra: nginx + systemd (deploy en Vultr).
+
+## Estructura del repo
+
+```text
+.
+|- backend/
+|  |- app/                 # API Flask, rutas, DB y esquema
+|  |- tools/               # utilidades (seed, simulacion)
+|  |- requirements.txt
+|- frontend/
+|  |- app/                 # rutas App Router
+|  |- lib/                 # helpers de compra y supabase
+|  |- public/              # assets (logo, OG image)
+|  |- package.json
+|- deploy/ecowatt.ar/      # script deploy + plantillas
+|- docs/                   # documentacion adicional
+`- README.md
 ```
-.                                        # Raíz del proyecto
-├── backend/                             # API Server (Flask)
-│   ├── app/
-│   │   ├── __init__.py                  # Factory de la App Flask
-│   │   ├── __main__.py                  # Entry point de desarrollo
-│   │   ├── config.py                    # Configuración
-│   │   ├── db.py                        # Funciones de acceso a SQLite
-│   │   ├── routes.py                    # Endpoints de la API y Vistas
-│   │   ├── schema.sql                   # Esquema de la base de datos
-│   │   └── seed.py                      # Script para poblar datos de prueba
-│   ├── tools/                           # Scripts de utilidad
-│   ├── .venv/                           # Entorno virtual
-│   └── requirements.txt                 # Dependencias
-├── frontend/                            # Cliente Web (Next.js)
-│   ├── app/                             # Next.js App Router (Páginas y Layouts)
-│   │   ├── dashboard/                   # Vista principal de métricas
-│   │   ├── globals.css                  # Estilos globales (Tailwind)
-│   │   ├── layout.tsx                   # Layout raíz
-│   │   └── page.tsx                     # Landing page
-│   ├── public/                          # Archivos estáticos
-│   ├── next.config.ts                   # Configuración de Next.js (Proxy API)
-│   └── package.json                     # Dependencias
-├── data/                                # Base de datos SQLite (generada al iniciar)
-└── README.md                            # Documentación
+
+## Variables de entorno
+
+### Backend (`backend/.env`)
+
+Minimo requerido:
+
+```env
+APP_SECRET=dev-secret-change-me
+DB_PATH=./data/sisterna.sqlite
+SUPABASE_URL=https://TU_PROYECTO.supabase.co
+SUPABASE_ANON_KEY=TU_SUPABASE_ANON_KEY
 ```
 
-## 🚀 Instalación y Ejecución
+Para endpoints admin:
 
-### Requisitos Previos
-- **Python 3.10+**
-- **Node.js 18+**
+```env
+SUPABASE_SERVICE_ROLE_KEY=TU_SUPABASE_SERVICE_ROLE_KEY
+ADMIN_EMAILS=admin@ecowatt.com,otro-admin@ecowatt.com
+```
 
-### 1. Backend (Flask)
+### Frontend (`frontend/.env.local`)
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://TU_PROYECTO.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=TU_SUPABASE_ANON_KEY
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+```
+
+## Ejecucion local
+
+### 1) Backend
 
 ```bash
-# Navegar al directorio backend
 cd backend
-
-# Crear entorno virtual
 python -m venv .venv
-
-# Activar entorno virtual
-# Windows:
+# Windows PowerShell:
 .\.venv\Scripts\Activate
-# macOS/Linux:
+# Linux/macOS:
 # source .venv/bin/activate
-
-# Instalar dependencias
 pip install -r requirements.txt
-
-# Ejecutar servidor de desarrollo (puerto 5000)
-# Esto inicializará la base de datos automáticamente si no existe.
 python -m app
 ```
 
-El servidor API estará disponible en `http://localhost:5000`.
+Backend local: `http://127.0.0.1:5000`
 
-### 2. Frontend (Next.js)
+### 2) Frontend
 
 ```bash
-# Navegar al directorio frontend
 cd frontend
-
-# Instalar dependencias
-npm install
-
-# Ejecutar servidor de desarrollo (puerto 3000)
+npm ci
 npm run dev
 ```
 
-La aplicación estará disponible en `http://localhost:3000`.
-El frontend está configurado para redirigir las llamadas `/api/*` automáticamente al backend (`http://127.0.0.1:5000`) para evitar problemas de CORS en desarrollo.
+Frontend local: `http://localhost:3000`
 
-## 🌐 Deploy en producción (dominio `ecowatt.ar`)
+En desarrollo, `frontend/next.config.ts` reescribe `/api/*` a `http://127.0.0.1:5000/api/*`.
 
-Se agregó una guía paso a paso para publicar toda la aplicación (Flask + Next.js) con Nginx, systemd y HTTPS:
+## API (resumen)
 
-- [`docs/deploy-ecowatt-ar.md`](docs/deploy-ecowatt-ar.md)
-- Plantillas listas en `deploy/ecowatt.ar/` (services, Nginx y `.env` de ejemplo)
+Base: `/api/v1`
 
-## 📊 Endpoints Disponibles
+### Publicos
 
-La API se encuentra prefijada bajo `/api/v1`.
+- `GET /api/v1/health`
+- `POST /api/v1/checkout/request`
 
-### Dispositivos
-- `GET /api/v1/devices`: Listar dispositivos.
-- `POST /api/v1/devices`: Crear dispositivo.
-- `PATCH /api/v1/devices/{id}`: Actualizar dispositivo (nombre, umbral).
-- `DELETE /api/v1/devices/{id}`: Eliminar dispositivo y sus mediciones.
+`POST /api/v1/checkout/request`:
 
-### Mediciones e Ingesta
-- `POST /api/v1/measurements`: Registrar medición (Usado por Firmware ESP32).
-  - Headers: `X-API-Key: <device_api_key>`
-  - Body: `{ "energy_wh": 12.5, "power": 300, ... }`
+- valida plan, cantidades, datos de comprador y limites por plan.
+- aplica rate limit por IP (5 requests cada 60 segundos).
+- soporta `idempotency_key` opcional para evitar duplicados.
 
-### Métricas (Dashboard)
-- `GET /api/v1/metrics/summary_month`: Resumen mensual, alertas y top consumidor.
-- `GET /api/v1/metrics/daily`: Consumo diario agrupado.
+Payload ejemplo:
 
-### Exportación
-- `GET /api/v1/export/measurements.csv`: Descarga CSV de mediciones.
-- `GET /api/v1/export/daily.csv`: Descarga CSV diario.
-- `GET /api/v1/export/alerts.csv`: Descarga CSV de alertas.
+```json
+{
+  "plan": "basico",
+  "meters": {
+    "plug": 1,
+    "panel_1f": 0,
+    "panel_3f": 0,
+    "extra_phase": 0
+  },
+  "buyer": {
+    "full_name": "Nombre Apellido",
+    "phone": "+54 9 11 1234 5678",
+    "email": "cliente@email.com",
+    "document_type": "dni",
+    "document_number": "30111222",
+    "address": "Calle 123",
+    "property_type": "casa"
+  },
+  "idempotency_key": "checkout_abc123"
+}
+```
 
-## 🤝 Contribuciones
+### Requieren Bearer token (Supabase)
 
-Este proyecto fue desarrollado como parte del trabajo de tesis de:
+- `POST /api/v1/devices`
+- `GET /api/v1/devices`
+- `PATCH /api/v1/devices/{id}`
+- `DELETE /api/v1/devices/{id}`
+- `POST /api/v1/measurements` (tambien admite `X-API-Key` del dispositivo)
+- `GET /api/v1/metrics/summary_month`
+- `GET /api/v1/metrics/daily`
 
-- **Valentina Peirano**
-- **Tomas Sisterna**
+### Exportaciones (solo Premium)
 
-## 📄 Licencia
+- `GET /api/v1/export/measurements.csv`
+- `GET /api/v1/export/daily.csv`
+- `GET /api/v1/export/alerts.csv`
 
-Este proyecto es parte de un trabajo académico.
----
-**Desarrollado para la Licenciatura en Gestión de Sistemas y Negocios**
+### Admin (requiere rol admin)
+
+- `GET /api/v1/admin/me`
+- `GET /api/v1/admin/users`
+- `POST /api/v1/admin/users`
+- `PATCH /api/v1/admin/users/{user_id}`
+- `DELETE /api/v1/admin/users/{user_id}`
+- `GET /api/v1/admin/checkout-requests`
+- `PATCH /api/v1/admin/checkout-requests/{request_id}`
+
+## Scripts utiles
+
+```bash
+# desde backend/
+python tools/seed_demo.py
+python tools/simulate_measurements.py --base-url http://127.0.0.1:5000 --owner-user-id <UUID>
+```
+
+## Deploy en servidor (`ecowatt.ar`)
+
+Script principal:
+
+```bash
+cd /opt/ecowatt/app
+./deploy/ecowatt.ar/deploy.sh main
+# o
+./deploy/ecowatt.ar/deploy.sh develop
+```
+
+El script hace:
+
+- `git fetch/checkout/pull` de la rama objetivo.
+- instalacion backend (`pip`) y frontend (`npm ci` + `npm run build`).
+- restart de `ecowatt-backend`, `ecowatt-frontend` y reload de `nginx`.
+- health checks:
+  - `GET http://127.0.0.1:5000/health`
+  - `GET https://ecowatt.ar/api/v1/health`
+  - `POST /api/v1/checkout/request` (probe)
+  - `GET https://ecowatt.ar/admin/login`
+
+Documentacion de deploy: `docs/deploy-ecowatt-ar.md`

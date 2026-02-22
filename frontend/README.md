@@ -1,55 +1,126 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# EcoWatt Frontend
 
-## Getting Started
+Frontend web de EcoWatt construido con Next.js 16 (App Router).
 
-First, run the development server:
+## Alcance funcional
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Landing publica (`/`, `/producto`, `/soporte`, `/terminos`).
+- Paginas de planes (`/planes`, `/planes/basico`, `/planes/avanzado`, `/planes/premium`).
+- Carrito en 3 pasos:
+  1. Seleccion de plan SaaS.
+  2. Seleccion de medidores (Plug, Panel 1F, Panel 3F, Fase extra).
+  3. Formulario de comprador y envio de solicitud.
+- Checkout conectado a `POST /api/v1/checkout/request`.
+- Dashboard de consumo (`/dashboard`) con restricciones por plan.
+- Admin login (`/admin/login`) y panel admin (`/admin`) para gestionar usuarios y solicitudes de checkout.
+
+## Precios y reglas que usa el frontend
+
+Definidos en `frontend/lib/purchase.ts`.
+
+### Planes (mensual, ARS)
+
+- Basico: `7900`, hasta 1 medidor, sin exportaciones.
+- Avanzado: `12900`, hasta 3 medidores, sin exportaciones.
+- Premium: `19900`, hasta 6 medidores, exportaciones premium.
+
+Nota: no existe funcionalidad multiusuario por plan.
+
+### Hardware (venta unica, ARS)
+
+- EcoWatt Plug: `49900`
+- EcoWatt Panel 1 fase: `149900`
+- EcoWatt Panel 3 fases: `219900`
+- Fase extra: `34900`
+
+## Requisitos
+
+- Node.js 18+
+- Backend Flask ejecutandose en `http://127.0.0.1:5000` (en desarrollo)
+- Proyecto Supabase configurado para Auth
+
+## Variables de entorno
+
+Crear `frontend/.env.local` desde `frontend/.env.example`:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://TU_PROYECTO.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=TU_SUPABASE_ANON_KEY
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Notas:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` son obligatorias.
+- Para login con Google, configurar URLs de callback en Supabase (`/auth/callback`).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Comandos
 
-## Supabase login (Google)
+```bash
+cd frontend
+npm ci
+npm run dev
+npm run build
+npm run start
+npm run lint
+```
 
-1. Copy `frontend/.env.example` to `frontend/.env.local`.
-2. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` with values from Supabase Dashboard > Settings > API.
-3. Set `NEXT_PUBLIC_SITE_URL` to the URL where you open the frontend (for example `http://localhost:3000` or `http://192.168.100.134:3000`).
-4. In Supabase Auth > URL Configuration, add the same URL and callback you actually use:
-   - Site URL: `http://localhost:3000` and/or `http://192.168.100.134:3000`
-   - Redirect URL: `http://localhost:3000/auth/callback` and/or `http://192.168.100.134:3000/auth/callback`
-5. In Supabase Auth > Providers > Google, enable Google and configure OAuth credentials.
+Desarrollo: `http://localhost:3000`
 
-## Admin panel
+## Integracion con backend
 
-1. In backend env, set:
-   - `SUPABASE_SERVICE_ROLE_KEY`
-   - `ADMIN_EMAILS` (comma-separated emails allowed as admin)
-2. Start backend and frontend.
-3. Open `http://localhost:3000/admin/login`.
-4. Login with an admin account and manage users from `http://localhost:3000/admin`.
+`frontend/next.config.ts` reescribe `/api/:path*` a `http://127.0.0.1:5000/api/:path*`.
+Esto evita CORS durante desarrollo local.
 
-## Learn More
+## Flujo de checkout (interno)
 
-To learn more about Next.js, take a look at the following resources:
+1. El usuario arma carrito (`plan` + `meters`) y se guarda en localStorage.
+2. En `/checkout` completa datos (`fullName`, `phone`, `email`, `documentType`, `documentNumber`, `address`, `propertyType`).
+3. El frontend calcula un fingerprint del payload y usa `idempotency_key` para evitar duplicados.
+4. Se envia `POST /api/v1/checkout/request`.
+5. Si responde OK, se limpia carrito/borrador y se muestra resumen.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Claves de localStorage usadas:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `ecowatt_purchase_cart_v3`
+- `ecowatt_checkout_form_v3`
+- `ecowatt_checkout_idempotency_v1`
 
-## Deploy on Vercel
+## Panel admin (frontend)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Para que el panel admin funcione:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- El backend debe tener `SUPABASE_SERVICE_ROLE_KEY`.
+- El backend debe definir `ADMIN_EMAILS` con los correos permitidos.
+
+Rutas:
+
+- `/admin/login`
+- `/admin`
+
+## Branding y metadatos
+
+Definidos en `frontend/app/layout.tsx`:
+
+- Icono navegador: `/logo.PNG`
+- Open Graph / WhatsApp preview: `/og-ecowatt.jpg`
+
+## Estructura relevante
+
+```text
+frontend/
+|- app/
+|  |- admin/
+|  |- carrito/
+|  |- checkout/
+|  |- dashboard/
+|  |- planes/
+|  |- layout.tsx
+|- lib/
+|  |- purchase.ts
+|  `- supabase/
+|- public/
+|  |- logo.PNG
+|  `- og-ecowatt.jpg
+`- next.config.ts
+```
