@@ -59,7 +59,12 @@ export default function PlanesPage() {
           name="Premium"
           imageSrc="/premium.jpeg"
           tagline="Monitoreo completo"
-          features={["Alertas avanzadas", "Reportes detallados"]}
+          features={[
+            "Avanzado + hasta 6 medidores",
+            "Historial extendido",
+            "Comparativas avanzadas",
+            "Alertas y reportes avanzados",
+          ]}
           href="/planes/premium"
           recommended
         />
