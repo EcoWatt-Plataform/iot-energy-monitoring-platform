@@ -79,7 +79,15 @@ function getInitialCart(): CartItem[] {
   const cart = readStoredCart();
   const toAdd = resolveQueryItem();
   if (!toAdd) return cart;
-  return addItemToCart(cart, toAdd);
+  const updatedCart = addItemToCart(cart, toAdd);
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedCart));
+    } catch {
+      // ignore storage errors
+    }
+  }
+  return updatedCart;
 }
 
 function money(n: number) {
