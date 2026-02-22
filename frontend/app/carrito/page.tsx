@@ -1,86 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-
-type PlanId = "basico" | "avanzado" | "premium";
-type ItemId = PlanId | "dispositivo";
-
-type CartItem = {
-  id: ItemId;
-  nombre: string;
-  precio: number;
-  cantidad: number;
-};
-
-const STORAGE_KEY = "ecowatt_cart_v2";
-
-// Podés cambiar precios cuando quieras
-const PLANES: Record<PlanId, { id: PlanId; nombre: string; precio: number }> = {
-  basico: { id: "basico", nombre: "Plan Básico", precio: 1500 },
-  avanzado: { id: "avanzado", nombre: "Plan Avanzado", precio: 2900 },
-  premium: { id: "premium", nombre: "Plan Premium", precio: 4500 },
-};
-
-// ✅ Producto individual (EcoWatt solo)
-const DISPOSITIVO = {
-  id: "dispositivo" as const,
-  nombre: "EcoWatt (dispositivo)",
-  precio: 12000,
-};
-
-function getQueryParams(): { plan: PlanId | null; item: "dispositivo" | null } {
-  if (typeof window === "undefined") return { plan: null, item: null };
-
-  const params = new URLSearchParams(window.location.search);
-
-  const plan = params.get("plan");
-  const item = params.get("item");
-
-  const validPlan: PlanId | null =
-    plan === "basico" || plan === "avanzado" || plan === "premium" ? plan : null;
-
-  const validItem: "dispositivo" | null = item === "dispositivo" ? "dispositivo" : null;
-
-  return { plan: validPlan, item: validItem };
-}
-
-function readStoredCart(): CartItem[] {
-  if (typeof window === "undefined") return [];
-
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as CartItem[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function resolveQueryItem(): { id: ItemId; nombre: string; precio: number } | null {
-  const { plan, item } = getQueryParams();
-  if (plan) return PLANES[plan];
-  if (item === "dispositivo") return DISPOSITIVO;
-  return null;
-}
-
-function addItemToCart(cart: CartItem[], toAdd: { id: ItemId; nombre: string; precio: number }) {
-  const idx = cart.findIndex((x) => x.id === toAdd.id);
-  if (idx >= 0) {
-    return cart.map((x) =>
-      x.id === toAdd.id ? { ...x, cantidad: Math.min(99, x.cantidad + 1) } : x
-    );
-  }
-  return [...cart, { ...toAdd, cantidad: 1 }];
-}
-
-function getInitialCart(): CartItem[] {
-  const cart = readStoredCart();
-  const toAdd = resolveQueryItem();
-  if (!toAdd) return cart;
-  return addItemToCart(cart, toAdd);
-}
+import { useEffect, useMemo, useState } from "react";
+import {
+  type MeterType,
+  type PlanId,
+  METER_PRODUCTS,
+  PLAN_CONFIG,
+  getPlanMaxMeters,
+  meterHardwareTotal,
+  normalizeCart,
+  overallTotal,
+  readPurchaseCart,
+  totalMeters,
+  writePurchaseCart,
+} from "@/lib/purchase";
 
 function money(n: number) {
   return new Intl.NumberFormat("es-AR", {
@@ -89,324 +23,424 @@ function money(n: number) {
   }).format(n);
 }
 
-export default function CarritoPage() {
-  const [items, setItems] = useState<CartItem[]>(() => getInitialCart());
+function queryPlan(): PlanId | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  const plan = (params.get("plan") || "").trim().toLowerCase();
+  if (plan === "basico" || plan === "avanzado" || plan === "premium") {
+    return plan as PlanId;
+  }
+  return null;
+}
 
-  // Responsive detector
+function initialCart(): ReturnType<typeof readPurchaseCart> {
+  const base = readPurchaseCart();
+  const fromQuery = queryPlan();
+  if (!fromQuery) return base;
+  return writePurchaseCart(normalizeCart({ ...base, plan: fromQuery }));
+}
+
+export default function CarritoPage() {
+  const [cart, setCart] = useState(() => initialCart());
   const [isMobile, setIsMobile] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const maxMeters = getPlanMaxMeters(cart.plan);
+  const selectedMeters = totalMeters(cart.meters);
+  const canContinue = Boolean(cart.plan) && selectedMeters > 0;
 
   useEffect(() => {
     function onResize() {
-      setIsMobile(window.innerWidth < 900);
+      setIsMobile(window.innerWidth < 920);
     }
     onResize();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Persistir carrito en cada cambio de estado.
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  }, [items]);
-
-  // Si viene ?plan=... o ?item=dispositivo, se limpia la query para no re-ejecutar al refrescar.
-  useEffect(() => {
-    const toAdd = resolveQueryItem();
-    if (!toAdd) return;
+    const fromQuery = queryPlan();
+    if (!fromQuery) return;
     window.history.replaceState({}, "", "/carrito");
   }, []);
 
-  function guardar(nuevo: CartItem[]) {
-    setItems(nuevo);
+  function updateCart(next: typeof cart) {
+    const stored = writePurchaseCart(next);
+    setCart(stored);
   }
 
-  function setCantidad(id: ItemId, cantidad: number) {
-    const qty = Math.max(1, Math.min(99, Number.isFinite(cantidad) ? cantidad : 1));
-    const nuevo = items.map((x) => (x.id === id ? { ...x, cantidad: qty } : x));
-    guardar(nuevo);
+  function selectPlan(plan: PlanId) {
+    setNotice(null);
+    updateCart({ ...cart, plan });
   }
 
-  function eliminar(id: ItemId) {
-    guardar(items.filter((x) => x.id !== id));
+  function clearSelection() {
+    setNotice(null);
+    updateCart({ plan: cart.plan, meters: { plug: 0, panel: 0 } });
   }
 
-  function vaciar() {
-    guardar([]);
+  function setMeterQty(type: MeterType, qtyInput: number) {
+    if (!cart.plan) {
+      setNotice("Primero selecciona un plan en el Paso 1.");
+      return;
+    }
+
+    const max = PLAN_CONFIG[cart.plan].maxMeters;
+    const qty = Math.max(0, Math.floor(Number.isFinite(qtyInput) ? qtyInput : 0));
+
+    const nextMeters = { ...cart.meters, [type]: qty };
+    const total = totalMeters(nextMeters);
+
+    if (total > max) {
+      const otherType: MeterType = type === "plug" ? "panel" : "plug";
+      const overflow = total - max;
+      nextMeters[otherType] = Math.max(0, nextMeters[otherType] - overflow);
+      setNotice(
+        `Tu plan ${PLAN_CONFIG[cart.plan].label} permite hasta ${max} medidor(es).`
+      );
+    } else {
+      setNotice(null);
+    }
+
+    updateCart({ ...cart, meters: nextMeters });
   }
 
-  const totalParcial = useMemo(
-    () => items.reduce((acc, x) => acc + x.precio * x.cantidad, 0),
-    [items]
-  );
+  const meterRows = useMemo(() => {
+    return (Object.keys(METER_PRODUCTS) as MeterType[]).map((type) => {
+      const product = METER_PRODUCTS[type];
+      const qty = cart.meters[type];
+      const subtotal = qty * product.price;
+      const disablePlus = !cart.plan || selectedMeters >= maxMeters;
+
+      return {
+        type,
+        ...product,
+        qty,
+        subtotal,
+        disablePlus,
+      };
+    });
+  }, [cart.meters, cart.plan, selectedMeters, maxMeters]);
+
+  const planPrice = cart.plan ? PLAN_CONFIG[cart.plan].monthlyPrice : 0;
+  const hardwareTotal = meterHardwareTotal(cart.meters);
+  const total = overallTotal(cart);
 
   return (
-    <div
-      style={{
-        padding: isMobile ? "18px" : "40px",
-        maxWidth: "1100px",
-        margin: "0 auto",
-      }}
-    >
-      <h1 style={{ fontSize: isMobile ? "28px" : "40px", marginBottom: "10px" }}>
-        Revisá tu carrito
+    <div style={{ maxWidth: "1140px", margin: "0 auto", padding: isMobile ? "18px" : "36px" }}>
+      <h1 style={{ marginTop: 0, marginBottom: "8px", fontSize: isMobile ? "28px" : "40px" }}>
+        Proceso de compra
       </h1>
-      <p style={{ color: "#555", marginTop: 0, marginBottom: "26px" }}>
-        Podés ajustar cantidades y ver el subtotal.
+      <p style={{ marginTop: 0, color: "#475569", marginBottom: "18px" }}>
+        Paso 1: elige plan. Paso 2: define medidores EcoWatt Plug o EcoWatt Panel.
       </p>
 
-      {items.length === 0 ? (
-        <div
-          style={{
-            border: "1px solid #eee",
-            borderRadius: "14px",
-            padding: "18px",
-            background: "white",
-          }}
-        >
-          <p style={{ margin: 0 }}>Tu carrito está vacío.</p>
-          <div style={{ marginTop: "14px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
-            <a href="/planes" style={secondaryBtn}>
-              Ver planes
-            </a>
-          </div>
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "18px" }}>
+        <span style={stepBadge}>Paso 1: Plan</span>
+        <span style={stepBadge}>Paso 2: Medidores</span>
+        <span style={stepBadge}>Paso 3: Datos</span>
+      </div>
+
+      {notice && (
+        <div style={noticeStyle}>
+          {notice}
         </div>
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : "1fr 360px",
-            gap: "18px",
-            alignItems: "start",
-          }}
-        >
-          {/* ITEMS */}
-          <div style={box}>
-            {/* Header “tabla” solo desktop */}
-            {!isMobile && (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 120px 170px 120px",
-                  padding: "14px 16px",
-                  borderBottom: "1px solid #eee",
-                  fontSize: "12px",
-                  letterSpacing: "0.08em",
-                  color: "#555",
-                }}
-              >
-                <div>ITEM</div>
-                <div style={{ textAlign: "right" }}>PRECIO</div>
-                <div style={{ textAlign: "center" }}>CANTIDAD</div>
-                <div style={{ textAlign: "right" }}>SUBTOTAL</div>
-              </div>
-            )}
+      )}
 
-            {/* Filas / cards */}
-            <div style={{ padding: isMobile ? "0" : "0" }}>
-              {items.map((item) => {
-                const subtotal = item.precio * item.cantidad;
-
-                // ✅ MOBILE: item como “card”
-                if (isMobile) {
-                  return (
-                    <div
-                      key={item.id}
-                      style={{
-                        padding: "14px 16px",
-                        borderBottom: "1px solid #f2f2f2",
-                        display: "grid",
-                        gap: "10px",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <button
-                          type="button"
-                          onClick={() => eliminar(item.id)}
-                          style={removeBtn}
-                          title="Eliminar"
-                          aria-label="Eliminar"
-                        >
-                          ×
-                        </button>
-                        <div style={{ fontWeight: 800 }}>{item.nombre}</div>
-                      </div>
-
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr 1fr",
-                          gap: "10px",
-                          alignItems: "center",
-                        }}
-                      >
-                        <div style={{ color: "#666", fontSize: "13px" }}>Precio</div>
-                        <div style={{ textAlign: "right", fontWeight: 700 }}>{money(item.precio)}</div>
-
-                        <div style={{ color: "#666", fontSize: "13px" }}>Cantidad</div>
-                        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                          <input
-                            type="number"
-                            min={1}
-                            max={99}
-                            value={item.cantidad}
-                            onChange={(e) => setCantidad(item.id, Number(e.target.value))}
-                            style={qtyInput}
-                          />
-                        </div>
-
-                        <div style={{ color: "#666", fontSize: "13px" }}>Subtotal</div>
-                        <div style={{ textAlign: "right", fontWeight: 800 }}>{money(subtotal)}</div>
-                      </div>
-                    </div>
-                  );
-                }
-
-                // ✅ DESKTOP: tabla
-                return (
-                  <div
-                    key={item.id}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 120px 170px 120px",
-                      padding: "16px",
-                      borderBottom: "1px solid #f2f2f2",
-                      alignItems: "center",
-                      gap: "10px",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <button
-                        type="button"
-                        onClick={() => eliminar(item.id)}
-                        style={removeBtn}
-                        title="Eliminar"
-                        aria-label="Eliminar"
-                      >
-                        ×
-                      </button>
-                      <div style={{ fontWeight: 800 }}>{item.nombre}</div>
-                    </div>
-
-                    <div style={{ textAlign: "right" }}>{money(item.precio)}</div>
-
-                    <div style={{ display: "flex", justifyContent: "center" }}>
-                      <input
-                        type="number"
-                        min={1}
-                        max={99}
-                        value={item.cantidad}
-                        onChange={(e) => setCantidad(item.id, Number(e.target.value))}
-                        style={qtyInput}
-                      />
-                    </div>
-
-                    <div style={{ textAlign: "right", fontWeight: 800 }}>{money(subtotal)}</div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Acciones abajo */}
-            <div style={{ padding: "14px 16px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              <a href="/planes" style={secondaryBtn}>
-                Seguir viendo planes
-              </a>
-
-              <button type="button" onClick={vaciar} style={secondaryBtnAsButton}>
-                Vaciar carrito
-              </button>
-            </div>
-          </div>
-
-          {/* TOTALES */}
-          <div style={box}>
-            <h2 style={{ marginTop: 0, marginBottom: "14px", fontSize: "18px" }}>
-              Totales del carrito
-            </h2>
-
-            <div style={{ display: "flex", justifyContent: "space-between", color: "#555" }}>
-              <span>Total parcial</span>
-              <span>{money(totalParcial)}</span>
-            </div>
+      <div
+        style={{
+          display: "grid",
+          gap: "16px",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 340px",
+          alignItems: "start",
+        }}
+      >
+        <div style={{ display: "grid", gap: "16px" }}>
+          <section style={boxStyle}>
+            <h2 style={{ marginTop: 0, marginBottom: "10px" }}>Paso 1: Selecciona tu plan</h2>
+            <p style={{ marginTop: 0, color: "#64748b", fontSize: "14px" }}>
+              Compara rapidamente y selecciona el plan antes de elegir medidores.
+            </p>
 
             <div
               style={{
-                marginTop: "10px",
-                borderTop: "1px solid #eee",
-                paddingTop: "10px",
-                display: "flex",
-                justifyContent: "space-between",
-                fontWeight: 800,
+                display: "grid",
+                gap: "12px",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
               }}
             >
-              <span>Total</span>
-              <span>{money(totalParcial)}</span>
+              {(Object.keys(PLAN_CONFIG) as PlanId[]).map((planId) => {
+                const plan = PLAN_CONFIG[planId];
+                const active = cart.plan === planId;
+                return (
+                  <article
+                    key={`plan-${planId}`}
+                    style={{
+                      border: active ? "2px solid #2563eb" : "1px solid #e2e8f0",
+                      borderRadius: "14px",
+                      padding: "14px",
+                      background: active ? "#eff6ff" : "#ffffff",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                      <strong style={{ fontSize: "18px" }}>{plan.label}</strong>
+                      {active && (
+                        <span style={selectedChip}>Seleccionado</span>
+                      )}
+                    </div>
+                    <p style={{ color: "#475569", marginTop: "8px", marginBottom: "10px", fontSize: "14px" }}>
+                      {plan.summary}
+                    </p>
+                    <ul style={{ margin: 0, paddingLeft: "18px", color: "#334155", lineHeight: 1.6 }}>
+                      <li>{plan.maxMeters} medidor(es) maximo</li>
+                      <li>Historial {plan.historyMonths} meses</li>
+                      <li>{plan.dashboard}</li>
+                      <li>Alertas {plan.alerts.toLowerCase()}</li>
+                    </ul>
+                    <button
+                      type="button"
+                      onClick={() => selectPlan(planId)}
+                      style={{ ...btnPrimary, marginTop: "12px", width: "100%" }}
+                    >
+                      {active ? "Plan activo" : `Elegir ${plan.label}`}
+                    </button>
+                  </article>
+                );
+              })}
             </div>
+          </section>
 
-            <Link href="/checkout" style={primaryLinkBtn}>
-              Continuar
+          <section style={boxStyle}>
+            <h2 style={{ marginTop: 0, marginBottom: "10px" }}>Paso 2: Selecciona medidores</h2>
+            {!cart.plan ? (
+              <p style={{ margin: 0, color: "#64748b" }}>
+                Primero selecciona un plan para habilitar los medidores.
+              </p>
+            ) : (
+              <>
+                <p style={{ marginTop: 0, color: "#64748b" }}>
+                  Plan {PLAN_CONFIG[cart.plan].label}: puedes agregar hasta {maxMeters} medidor(es).
+                </p>
+
+                <div style={{ display: "grid", gap: "12px" }}>
+                  {meterRows.map((meter) => (
+                    <article
+                      key={`meter-${meter.type}`}
+                      style={{
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "12px",
+                        padding: "12px",
+                        background: "#fff",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", flexWrap: "wrap" }}>
+                        <div>
+                          <strong>{meter.label}</strong>
+                          <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: "14px" }}>
+                            {meter.description}
+                          </p>
+                        </div>
+                        <strong>{money(meter.price)}</strong>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "12px", flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => setMeterQty(meter.type, meter.qty - 1)}
+                          disabled={meter.qty <= 0}
+                          style={qtyBtn}
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          min={0}
+                          max={maxMeters}
+                          value={meter.qty}
+                          onChange={(e) => setMeterQty(meter.type, Number(e.target.value))}
+                          style={qtyInput}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setMeterQty(meter.type, meter.qty + 1)}
+                          disabled={meter.disablePlus}
+                          style={qtyBtn}
+                        >
+                          +
+                        </button>
+                        <span style={{ marginLeft: "auto", fontWeight: 700 }}>
+                          Subtotal: {money(meter.subtotal)}
+                        </span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </>
+            )}
+          </section>
+        </div>
+
+        <aside style={boxStyle}>
+          <h2 style={{ marginTop: 0, marginBottom: "12px", fontSize: "20px" }}>Resumen</h2>
+          <div style={summaryRow}>
+            <span>Plan</span>
+            <strong>{cart.plan ? PLAN_CONFIG[cart.plan].label : "Sin seleccionar"}</strong>
+          </div>
+          <div style={summaryRow}>
+            <span>Maximo medidores</span>
+            <strong>{cart.plan ? maxMeters : "-"}</strong>
+          </div>
+          <div style={summaryRow}>
+            <span>Seleccionados</span>
+            <strong>
+              {selectedMeters}{cart.plan ? ` / ${maxMeters}` : ""}
+            </strong>
+          </div>
+          <div style={summaryRow}>
+            <span>EcoWatt Plug</span>
+            <strong>{cart.meters.plug}</strong>
+          </div>
+          <div style={summaryRow}>
+            <span>EcoWatt Panel</span>
+            <strong>{cart.meters.panel}</strong>
+          </div>
+
+          <hr style={{ border: 0, borderTop: "1px solid #e2e8f0", margin: "12px 0" }} />
+
+          <div style={summaryRow}>
+            <span>Suscripcion mensual</span>
+            <strong>{money(planPrice)}</strong>
+          </div>
+          <div style={summaryRow}>
+            <span>Hardware</span>
+            <strong>{money(hardwareTotal)}</strong>
+          </div>
+          <div style={{ ...summaryRow, fontSize: "16px" }}>
+            <strong>Total inicial</strong>
+            <strong>{money(total)}</strong>
+          </div>
+
+          <div style={{ display: "grid", gap: "10px", marginTop: "12px" }}>
+            <Link
+              href={canContinue ? "/checkout" : "#"}
+              style={canContinue ? btnPrimary : btnDisabled}
+              onClick={(e) => {
+                if (!canContinue) {
+                  e.preventDefault();
+                  setNotice("Selecciona plan y al menos 1 medidor para continuar al Paso 3.");
+                }
+              }}
+            >
+              Ir al Paso 3
+            </Link>
+
+            <button type="button" onClick={clearSelection} style={btnSecondary}>
+              Limpiar medidores
+            </button>
+
+            <Link href="/planes" style={btnSecondaryLink}>
+              Volver a planes
             </Link>
           </div>
-        </div>
-      )}
+        </aside>
+      </div>
     </div>
   );
 }
 
-/* ================= Styles ================= */
-
-const box: React.CSSProperties = {
-  border: "1px solid #eee",
+const boxStyle: React.CSSProperties = {
+  border: "1px solid #e2e8f0",
   borderRadius: "16px",
-  background: "white",
-  overflow: "hidden",
+  background: "#fff",
+  padding: "16px",
 };
 
-const removeBtn: React.CSSProperties = {
-  width: "28px",
-  height: "28px",
+const stepBadge: React.CSSProperties = {
+  border: "1px solid #cbd5e1",
   borderRadius: "999px",
-  border: "1px solid #ddd",
-  background: "white",
+  padding: "5px 10px",
+  fontSize: "12px",
+  color: "#334155",
+  background: "#f8fafc",
+};
+
+const selectedChip: React.CSSProperties = {
+  borderRadius: "999px",
+  padding: "2px 8px",
+  fontSize: "11px",
+  background: "#dbeafe",
+  color: "#1d4ed8",
+  fontWeight: 700,
+};
+
+const noticeStyle: React.CSSProperties = {
+  border: "1px solid #fecaca",
+  background: "#fff1f2",
+  color: "#9f1239",
+  borderRadius: "10px",
+  padding: "10px 12px",
+  marginBottom: "16px",
+};
+
+const summaryRow: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "10px",
+  marginBottom: "8px",
+  color: "#334155",
+};
+
+const btnPrimary: React.CSSProperties = {
+  display: "inline-block",
+  textAlign: "center",
+  border: "none",
+  borderRadius: "12px",
+  padding: "12px 14px",
+  background: "linear-gradient(90deg, #6992eb, #9b6ceb)",
+  color: "#111827",
+  fontWeight: 700,
+  textDecoration: "none",
+  cursor: "pointer",
+};
+
+const btnDisabled: React.CSSProperties = {
+  ...btnPrimary,
+  background: "#cbd5e1",
+  color: "#64748b",
+  cursor: "not-allowed",
+};
+
+const btnSecondary: React.CSSProperties = {
+  border: "1px solid #d1d5db",
+  borderRadius: "10px",
+  background: "#fff",
+  color: "#0f172a",
+  padding: "10px 12px",
+  cursor: "pointer",
+};
+
+const btnSecondaryLink: React.CSSProperties = {
+  ...btnSecondary,
+  textAlign: "center",
+  textDecoration: "none",
+  display: "inline-block",
+};
+
+const qtyBtn: React.CSSProperties = {
+  width: "34px",
+  height: "34px",
+  borderRadius: "8px",
+  border: "1px solid #d1d5db",
+  background: "#fff",
   cursor: "pointer",
   fontSize: "18px",
   lineHeight: 1,
 };
 
 const qtyInput: React.CSSProperties = {
-  width: "76px",
-  padding: "10px",
-  borderRadius: "12px",
-  border: "1px solid #ddd",
+  width: "86px",
+  padding: "8px",
+  borderRadius: "8px",
+  border: "1px solid #d1d5db",
   textAlign: "center",
-};
-
-const secondaryBtn: React.CSSProperties = {
-  display: "inline-block",
-  padding: "10px 12px",
-  borderRadius: "10px",
-  border: "1px solid #ddd",
-  textDecoration: "none",
-  color: "black",
-  background: "white",
-};
-
-const secondaryBtnAsButton: React.CSSProperties = {
-  padding: "10px 12px",
-  borderRadius: "10px",
-  border: "1px solid #ddd",
-  background: "white",
-  cursor: "pointer",
-};
-
-const primaryLinkBtn: React.CSSProperties = {
-  marginTop: "14px",
-  display: "block",
-  textAlign: "center",
-  padding: "12px 14px",
-  borderRadius: "12px",
-  color: "black",
-  textDecoration: "none",
-  background: "linear-gradient(90deg, #6992eb, #9b6ceb)",
-  fontWeight: 800,
 };
