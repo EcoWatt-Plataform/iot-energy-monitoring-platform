@@ -32,10 +32,10 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/logo.PNG",
-        width: 1024,
-        height: 1536,
-        alt: "EcoWatt",
+        url: "/og-ecowatt.jpg",
+        width: 1200,
+        height: 630,
+        alt: "EcoWatt - Monitoreo inteligente del consumo energetico",
       },
     ],
   },
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "EcoWatt",
     description: "Monitoreo inteligente del consumo energetico",
-    images: ["/logo.PNG"],
+    images: ["/og-ecowatt.jpg"],
   },
 };
 

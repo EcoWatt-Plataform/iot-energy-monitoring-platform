@@ -13,6 +13,9 @@ BRANCH="${1:-main}"
 APP_DIR="${APP_DIR:-/opt/ecowatt/app}"
 REMOTE="${REMOTE:-origin}"
 PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-https://ecowatt.ar}"
+CURL_TIMEOUT="${CURL_TIMEOUT:-10}"
+HEALTH_RETRIES="${HEALTH_RETRIES:-12}"
+HEALTH_RETRY_DELAY="${HEALTH_RETRY_DELAY:-2}"
 
 BACKEND_DIR="${APP_DIR}/backend"
 FRONTEND_DIR="${APP_DIR}/frontend"
@@ -42,6 +45,72 @@ if [[ $EUID -ne 0 ]]; then
 else
   SUDO=""
 fi
+
+code_in_list() {
+  local code="$1"
+  shift
+  local candidate
+  for candidate in "$@"; do
+    if [[ "${code}" == "${candidate}" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+request_http_code() {
+  local method="$1"
+  local url="$2"
+  local outfile="$3"
+  local payload="${4:-}"
+  local code
+
+  if [[ -n "${payload}" ]]; then
+    code="$(curl -sS --max-time "${CURL_TIMEOUT}" -X "${method}" \
+      -H "Content-Type: application/json" \
+      -o "${outfile}" -w "%{http_code}" \
+      "${url}" --data "${payload}" || true)"
+  else
+    code="$(curl -sS --max-time "${CURL_TIMEOUT}" -X "${method}" \
+      -o "${outfile}" -w "%{http_code}" \
+      "${url}" || true)"
+  fi
+
+  if [[ -z "${code}" ]]; then
+    code="000"
+  fi
+  echo "${code}"
+}
+
+wait_for_http_codes() {
+  local label="$1"
+  local method="$2"
+  local url="$3"
+  local outfile="$4"
+  local payload="$5"
+  shift 5
+  local expected_codes=("$@")
+  local code="000"
+  local attempt=1
+
+  while (( attempt <= HEALTH_RETRIES )); do
+    code="$(request_http_code "${method}" "${url}" "${outfile}" "${payload}")"
+    if code_in_list "${code}" "${expected_codes[@]}"; then
+      echo "${code}"
+      return 0
+    fi
+    if (( attempt < HEALTH_RETRIES )); then
+      sleep "${HEALTH_RETRY_DELAY}"
+    fi
+    ((attempt++))
+  done
+
+  echo "ERROR: ${label} failed (HTTP ${code}; expected: ${expected_codes[*]})"
+  if [[ -f "${outfile}" ]]; then
+    cat "${outfile}"
+  fi
+  return 1
+}
 
 echo "==> Deploy start"
 echo "    branch: ${BRANCH}"
@@ -95,28 +164,58 @@ echo "    nginx: active"
 echo
 
 echo "==> Health checks"
-LOCAL_HEALTH_CODE="$(curl -sS -o /tmp/ecowatt_local_health.json -w "%{http_code}" "http://127.0.0.1:5000/health")"
-if [[ "${LOCAL_HEALTH_CODE}" != "200" ]]; then
-  echo "ERROR: local backend health failed (HTTP ${LOCAL_HEALTH_CODE})"
-  cat /tmp/ecowatt_local_health.json
-  exit 1
-fi
+LOCAL_HEALTH_CODE="$(wait_for_http_codes \
+  "local backend /health" \
+  "GET" \
+  "http://127.0.0.1:5000/health" \
+  "/tmp/ecowatt_local_health.json" \
+  "" \
+  "200")"
 echo "    local backend /health: HTTP ${LOCAL_HEALTH_CODE}"
 
-API_HEALTH_CODE="$(curl -sS -o /tmp/ecowatt_api_health.json -w "%{http_code}" "${PUBLIC_BASE_URL}/api/v1/health")"
-if [[ "${API_HEALTH_CODE}" != "200" ]]; then
-  echo "ERROR: public API health failed (HTTP ${API_HEALTH_CODE})"
-  cat /tmp/ecowatt_api_health.json
-  exit 1
-fi
+API_HEALTH_CODE="$(wait_for_http_codes \
+  "public API /api/v1/health" \
+  "GET" \
+  "${PUBLIC_BASE_URL}/api/v1/health" \
+  "/tmp/ecowatt_api_health.json" \
+  "" \
+  "200")"
 echo "    public API /api/v1/health: HTTP ${API_HEALTH_CODE}"
 
-ADMIN_LOGIN_CODE="$(curl -sS -I -o /tmp/ecowatt_admin_login.headers -w "%{http_code}" "${PUBLIC_BASE_URL}/admin/login")"
-if [[ "${ADMIN_LOGIN_CODE}" != "200" ]]; then
-  echo "ERROR: admin login page failed (HTTP ${ADMIN_LOGIN_CODE})"
-  cat /tmp/ecowatt_admin_login.headers
-  exit 1
+CHECKOUT_PROBE_PAYLOAD='{}'
+LOCAL_CHECKOUT_CODE="$(wait_for_http_codes \
+  "local backend POST /api/v1/checkout/request (probe)" \
+  "POST" \
+  "http://127.0.0.1:5000/api/v1/checkout/request" \
+  "/tmp/ecowatt_local_checkout_probe.json" \
+  "${CHECKOUT_PROBE_PAYLOAD}" \
+  "400" "429")"
+if [[ "${LOCAL_CHECKOUT_CODE}" == "429" ]]; then
+  echo "    WARN: local checkout probe hit rate limit (HTTP ${LOCAL_CHECKOUT_CODE})"
+else
+  echo "    local backend POST /api/v1/checkout/request: HTTP ${LOCAL_CHECKOUT_CODE}"
 fi
+
+PUBLIC_CHECKOUT_CODE="$(wait_for_http_codes \
+  "public API POST /api/v1/checkout/request (probe)" \
+  "POST" \
+  "${PUBLIC_BASE_URL}/api/v1/checkout/request" \
+  "/tmp/ecowatt_public_checkout_probe.json" \
+  "${CHECKOUT_PROBE_PAYLOAD}" \
+  "400" "429")"
+if [[ "${PUBLIC_CHECKOUT_CODE}" == "429" ]]; then
+  echo "    WARN: public checkout probe hit rate limit (HTTP ${PUBLIC_CHECKOUT_CODE})"
+else
+  echo "    public API POST /api/v1/checkout/request: HTTP ${PUBLIC_CHECKOUT_CODE}"
+fi
+
+ADMIN_LOGIN_CODE="$(wait_for_http_codes \
+  "public /admin/login" \
+  "GET" \
+  "${PUBLIC_BASE_URL}/admin/login" \
+  "/tmp/ecowatt_admin_login.html" \
+  "" \
+  "200")"
 echo "    public /admin/login: HTTP ${ADMIN_LOGIN_CODE}"
 echo
 

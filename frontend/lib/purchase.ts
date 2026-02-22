@@ -26,6 +26,11 @@ export type BuyerFormData = {
   propertyType: PropertyType;
 };
 
+export type CheckoutIdempotencyDraft = {
+  fingerprint: string;
+  key: string;
+};
+
 type LegacyPlanId = PlanId;
 type LegacyItemId = LegacyPlanId | "dispositivo";
 type LegacyCartItem = {
@@ -37,6 +42,7 @@ type LegacyCartItem = {
 
 export const PURCHASE_CART_KEY = "ecowatt_purchase_cart_v3";
 export const CHECKOUT_DRAFT_KEY = "ecowatt_checkout_form_v3";
+export const CHECKOUT_IDEMPOTENCY_KEY = "ecowatt_checkout_idempotency_v1";
 
 export const PLAN_CONFIG: Record<
   PlanId,
@@ -329,4 +335,35 @@ export function writeCheckoutDraft(form: BuyerFormData) {
 export function clearCheckoutDraft() {
   if (typeof window === "undefined") return;
   localStorage.removeItem(CHECKOUT_DRAFT_KEY);
+}
+
+export function readCheckoutIdempotencyDraft(): CheckoutIdempotencyDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(CHECKOUT_IDEMPOTENCY_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CheckoutIdempotencyDraft>;
+    const fingerprint = String(parsed.fingerprint ?? "").trim();
+    const key = String(parsed.key ?? "").trim();
+    if (!fingerprint || !key) return null;
+    return { fingerprint, key };
+  } catch {
+    return null;
+  }
+}
+
+export function writeCheckoutIdempotencyDraft(draft: CheckoutIdempotencyDraft) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(
+    CHECKOUT_IDEMPOTENCY_KEY,
+    JSON.stringify({
+      fingerprint: String(draft.fingerprint ?? "").trim(),
+      key: String(draft.key ?? "").trim(),
+    })
+  );
+}
+
+export function clearCheckoutIdempotencyDraft() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(CHECKOUT_IDEMPOTENCY_KEY);
 }

@@ -38,6 +38,38 @@ type AdminUsersResponse = {
   error?: string;
 };
 
+type CheckoutRequestStatus = "pendiente" | "contactado" | "cerrado" | "descartado";
+
+type CheckoutRequest = {
+  id: number;
+  status: CheckoutRequestStatus;
+  plan: Plan;
+  plan_price_ars: number;
+  max_meters: number;
+  plug_qty: number;
+  panel_qty: number;
+  panel_1f_qty: number;
+  panel_3f_qty: number;
+  extra_phase_qty: number;
+  meters_total: number;
+  hardware_total_ars: number;
+  total_ars: number;
+  buyer_full_name: string;
+  buyer_phone: string;
+  buyer_email: string;
+  buyer_document_type: string;
+  buyer_document_number: string;
+  buyer_address: string;
+  property_type: string;
+  idempotency_key: string | null;
+  created_at: string | null;
+};
+
+type AdminCheckoutRequestsResponse = {
+  requests?: CheckoutRequest[];
+  error?: string;
+};
+
 type UpdateUserPatch = Partial<{
   plan: Plan;
   role: Role;
@@ -67,6 +99,26 @@ type ProfileDraft = {
 
 const PLAN_OPTIONS: Plan[] = ["basico", "avanzado", "premium"];
 const ROLE_OPTIONS: Role[] = ["user", "admin"];
+const CHECKOUT_STATUS_OPTIONS: CheckoutRequestStatus[] = [
+  "pendiente",
+  "contactado",
+  "cerrado",
+  "descartado",
+];
+
+function moneyFromCents(value: number) {
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+  }).format((Number(value) || 0) / 100);
+}
+
+function formatCheckoutStatus(status: CheckoutRequestStatus) {
+  if (status === "pendiente") return "Pendiente";
+  if (status === "contactado") return "Contactado";
+  if (status === "cerrado") return "Cerrado";
+  return "Descartado";
+}
 
 function formatDate(value: string | null) {
   if (!value) return "-";
@@ -141,6 +193,10 @@ export default function AdminPage() {
   const [newCountry, setNewCountry] = useState("");
   const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>({});
   const [profileDrafts, setProfileDrafts] = useState<Record<string, ProfileDraft>>({});
+  const [checkoutRequests, setCheckoutRequests] = useState<CheckoutRequest[]>([]);
+  const [checkoutSearch, setCheckoutSearch] = useState("");
+  const [checkoutStatusFilter, setCheckoutStatusFilter] = useState<CheckoutRequestStatus | "all">("all");
+  const [expandedCheckoutRequests, setExpandedCheckoutRequests] = useState<Record<number, boolean>>({});
 
   async function getAccessToken() {
     const { data, error } = await supabase.auth.getSession();
@@ -214,6 +270,41 @@ export default function AdminPage() {
     });
   }
 
+  async function loadCheckoutRequests(
+    nextSearch = checkoutSearch,
+    nextStatus: CheckoutRequestStatus | "all" = checkoutStatusFilter
+  ) {
+    const searchParam = nextSearch.trim();
+    let url = "/api/v1/admin/checkout-requests?limit=200";
+    if (searchParam) {
+      url += `&search=${encodeURIComponent(searchParam)}`;
+    }
+    if (nextStatus !== "all") {
+      url += `&status=${encodeURIComponent(nextStatus)}`;
+    }
+
+    const res = await adminFetch(url);
+    const payload = (await res.json().catch(() => ({}))) as AdminCheckoutRequestsResponse;
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        await supabase.auth.signOut();
+        router.push("/admin/login?auth_error=login_required&next=/admin");
+        return;
+      }
+      throw new Error(payload.error || "No se pudo cargar las solicitudes de compra.");
+    }
+
+    const nextRequests = Array.isArray(payload.requests) ? payload.requests : [];
+    setCheckoutRequests(nextRequests);
+    setExpandedCheckoutRequests((prev) => {
+      const next: Record<number, boolean> = {};
+      for (const item of nextRequests) {
+        if (prev[item.id]) next[item.id] = true;
+      }
+      return next;
+    });
+  }
+
   useEffect(() => {
     let mounted = true;
 
@@ -223,6 +314,7 @@ export default function AdminPage() {
         const allowed = await ensureAdminSession();
         if (!allowed || !mounted) return;
         await loadUsers("");
+        await loadCheckoutRequests("", "all");
       } catch (error: unknown) {
         if (!mounted) return;
         const message =
@@ -245,6 +337,7 @@ export default function AdminPage() {
     setErrorText(null);
     try {
       await loadUsers(search);
+      await loadCheckoutRequests(checkoutSearch, checkoutStatusFilter);
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : "No se pudo refrescar el listado.";
@@ -499,6 +592,38 @@ export default function AdminPage() {
 
     if (Object.keys(patch).length === 0) return;
     await updateUser(userId, patch);
+  }
+
+  function toggleCheckoutDetails(requestId: number) {
+    setExpandedCheckoutRequests((prev) => ({ ...prev, [requestId]: !prev[requestId] }));
+  }
+
+  async function updateCheckoutStatus(requestId: number, status: CheckoutRequestStatus) {
+    const actionId = `checkout-${requestId}`;
+    setActiveAction(actionId);
+    setErrorText(null);
+    try {
+      const res = await adminFetch(`/api/v1/admin/checkout-requests/${requestId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status }),
+      });
+
+      const payload = (await res.json().catch(() => ({}))) as CheckoutRequest & { error?: string };
+      if (!res.ok) {
+        throw new Error(payload.error || "No se pudo actualizar el estado de la solicitud.");
+      }
+
+      setCheckoutRequests((prev) => prev.map((item) => (item.id === requestId ? payload : item)));
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "No se pudo actualizar el estado de la solicitud.";
+      setErrorText(message);
+    } finally {
+      setActiveAction(null);
+    }
   }
 
   return (
@@ -961,6 +1086,225 @@ export default function AdminPage() {
                                 >
                                   Guardar ficha
                                 </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section
+        style={{
+          marginTop: "14px",
+          border: "1px solid #e5e7eb",
+          borderRadius: "14px",
+          padding: "12px",
+          background: "white",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "12px",
+            flexWrap: "wrap",
+            marginBottom: "10px",
+          }}
+        >
+          <h2 style={{ margin: 0, fontSize: "18px" }}>Solicitudes de compra</h2>
+          <span style={{ fontSize: "13px", color: "#64748b" }}>
+            Total visibles: {checkoutRequests.length}
+          </span>
+        </div>
+
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <input
+            value={checkoutSearch}
+            onChange={(e) => setCheckoutSearch(e.target.value)}
+            placeholder="Buscar por id, cliente, email, telefono o direccion"
+            style={{
+              ...inputStyle,
+              flex: "1 1 280px",
+            }}
+          />
+          <select
+            value={checkoutStatusFilter}
+            onChange={(e) => setCheckoutStatusFilter(e.target.value as CheckoutRequestStatus | "all")}
+            style={selectStyle}
+          >
+            <option value="all">Estado: todos</option>
+            {CHECKOUT_STATUS_OPTIONS.map((status) => (
+              <option key={`checkout-filter-${status}`} value={status}>
+                Estado: {formatCheckoutStatus(status)}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => loadCheckoutRequests(checkoutSearch, checkoutStatusFilter)}
+            disabled={refreshing}
+            style={primaryBtnStyle}
+          >
+            Buscar
+          </button>
+        </div>
+      </section>
+
+      <section
+        style={{
+          marginTop: "14px",
+          border: "1px solid #e5e7eb",
+          borderRadius: "14px",
+          background: "white",
+          overflow: "hidden",
+        }}
+      >
+        {loading ? (
+          <div style={{ padding: "18px", color: "#4b5563" }}>Cargando solicitudes...</div>
+        ) : checkoutRequests.length === 0 ? (
+          <div style={{ padding: "18px", color: "#4b5563" }}>No hay solicitudes para mostrar.</div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1240px" }}>
+              <thead>
+                <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e5e7eb" }}>
+                  <Th>ID</Th>
+                  <Th>Fecha</Th>
+                  <Th>Estado</Th>
+                  <Th>Cliente</Th>
+                  <Th>Contacto</Th>
+                  <Th>Plan</Th>
+                  <Th>Medidores</Th>
+                  <Th>Total inicial</Th>
+                  <Th>Acciones</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {checkoutRequests.map((item) => {
+                  const busy = activeAction === `checkout-${item.id}`;
+                  const showDetails = Boolean(expandedCheckoutRequests[item.id]);
+                  return (
+                    <Fragment key={`checkout-${item.id}`}>
+                      <tr style={{ borderBottom: showDetails ? "none" : "1px solid #f1f5f9" }}>
+                        <Td>
+                          <code style={{ fontSize: "12px" }}>#{item.id}</code>
+                        </Td>
+                        <Td>{formatDate(item.created_at)}</Td>
+                        <Td>
+                          <select
+                            value={item.status}
+                            disabled={busy}
+                            onChange={(e) =>
+                              updateCheckoutStatus(item.id, e.target.value as CheckoutRequestStatus)
+                            }
+                            style={selectStyle}
+                          >
+                            {CHECKOUT_STATUS_OPTIONS.map((status) => (
+                              <option key={`checkout-status-${item.id}-${status}`} value={status}>
+                                {formatCheckoutStatus(status)}
+                              </option>
+                            ))}
+                          </select>
+                        </Td>
+                        <Td>
+                          <div style={{ display: "grid", gap: "2px" }}>
+                            <strong>{item.buyer_full_name}</strong>
+                            <span style={{ color: "#64748b", fontSize: "12px" }}>
+                              {item.buyer_document_type}: {item.buyer_document_number}
+                            </span>
+                          </div>
+                        </Td>
+                        <Td>
+                          <div style={{ display: "grid", gap: "2px" }}>
+                            <span>{item.buyer_email}</span>
+                            <span style={{ color: "#64748b", fontSize: "12px" }}>{item.buyer_phone}</span>
+                          </div>
+                        </Td>
+                        <Td>{item.plan}</Td>
+                        <Td>{item.meters_total}</Td>
+                        <Td>{moneyFromCents(item.total_ars)}</Td>
+                        <Td>
+                          <button
+                            type="button"
+                            onClick={() => toggleCheckoutDetails(item.id)}
+                            disabled={busy}
+                            style={secondaryActionBtnStyle}
+                          >
+                            {showDetails ? "Ocultar detalle" : "Ver detalle"}
+                          </button>
+                        </Td>
+                      </tr>
+
+                      {showDetails && (
+                        <tr style={{ borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
+                          <td colSpan={9} style={{ padding: "12px" }}>
+                            <div
+                              style={{
+                                border: "1px solid #e2e8f0",
+                                borderRadius: "10px",
+                                padding: "12px",
+                                background: "white",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gap: "8px",
+                                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                                }}
+                              >
+                                <DetailItem label="Solicitud ID" value={`#${item.id}`} />
+                                <DetailItem label="Estado" value={formatCheckoutStatus(item.status)} />
+                                <DetailItem label="Plan" value={item.plan} />
+                                <DetailItem label="Tipo cliente" value={item.property_type} />
+                                <DetailItem label="Direccion" value={item.buyer_address} />
+                                <DetailItem label="Idempotency key" value={item.idempotency_key || "-"} />
+                              </div>
+
+                              <div
+                                style={{
+                                  marginTop: "10px",
+                                  display: "grid",
+                                  gap: "8px",
+                                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                                }}
+                              >
+                                <DetailItem label="EcoWatt Plug" value={String(item.plug_qty)} />
+                                <DetailItem label="Panel 1F" value={String(item.panel_1f_qty)} />
+                                <DetailItem label="Panel 3F" value={String(item.panel_3f_qty)} />
+                                <DetailItem label="Fase extra" value={String(item.extra_phase_qty)} />
+                                <DetailItem label="Total medidores" value={String(item.meters_total)} />
+                                <DetailItem label="Max segun plan" value={String(item.max_meters)} />
+                              </div>
+
+                              <div
+                                style={{
+                                  marginTop: "10px",
+                                  display: "grid",
+                                  gap: "8px",
+                                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                                }}
+                              >
+                                <DetailItem
+                                  label="Plan mensual"
+                                  value={moneyFromCents(item.plan_price_ars)}
+                                />
+                                <DetailItem
+                                  label="Subtotal hardware"
+                                  value={moneyFromCents(item.hardware_total_ars)}
+                                />
+                                <DetailItem
+                                  label="Total inicial"
+                                  value={moneyFromCents(item.total_ars)}
+                                />
                               </div>
                             </div>
                           </td>
