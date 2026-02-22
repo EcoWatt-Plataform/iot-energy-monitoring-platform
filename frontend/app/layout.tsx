@@ -15,8 +15,36 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://ecowatt.ar"),
   title: "EcoWatt",
-  description: "Monitoreo inteligente del consumo energético",
+  description: "Monitoreo inteligente del consumo energetico",
+  icons: {
+    icon: [{ url: "/logo.PNG", type: "image/png" }],
+    shortcut: "/logo.PNG",
+    apple: "/logo.PNG",
+  },
+  openGraph: {
+    title: "EcoWatt",
+    description: "Monitoreo inteligente del consumo energetico",
+    url: "https://ecowatt.ar",
+    siteName: "EcoWatt",
+    locale: "es_AR",
+    type: "website",
+    images: [
+      {
+        url: "/og-ecowatt.jpg",
+        width: 1200,
+        height: 630,
+        alt: "EcoWatt - Monitoreo inteligente del consumo energetico",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "EcoWatt",
+    description: "Monitoreo inteligente del consumo energetico",
+    images: ["/og-ecowatt.jpg"],
+  },
 };
 
 export default function RootLayout({
@@ -30,14 +58,10 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         style={{ backgroundColor: "white", color: "black" }}
       >
-        {/* HEADER NUEVO (estilo Rivian) */}
         <Header />
 
-        {/* IMPORTANTE:
-            como el header es fixed, agregamos padding-top para que no tape el contenido */}
         <div style={{ paddingTop: "84px" }}>{children}</div>
 
-        {/* ================= FOOTER ================= */}
         <footer
           style={{
             marginTop: "80px",
@@ -46,7 +70,6 @@ export default function RootLayout({
             padding: "32px 24px",
           }}
         >
-          {/* Parte superior */}
           <div
             style={{
               maxWidth: "1100px",
@@ -58,16 +81,10 @@ export default function RootLayout({
               flexWrap: "wrap",
             }}
           >
-            {/* Logo */}
             <Link href="/" style={{ display: "flex", alignItems: "center" }}>
-              <img
-                src="/logo4.PNG"
-                alt="EcoWatt"
-                style={{ height: "28px", width: "auto" }}
-              />
+              <img src="/logo.PNG" alt="EcoWatt" style={{ height: "28px", width: "auto" }} />
             </Link>
 
-            {/* Links */}
             <div style={{ display: "flex", gap: "18px", flexWrap: "wrap" }}>
               <Link href="/producto" style={{ color: "white", textDecoration: "none" }}>
                 Producto
@@ -81,7 +98,6 @@ export default function RootLayout({
             </div>
           </div>
 
-          {/* Línea inferior */}
           <div
             style={{
               maxWidth: "1100px",
@@ -96,8 +112,8 @@ export default function RootLayout({
               gap: "10px",
             }}
           >
-            <span>©️ 2026 EcoWatt. Todos los derechos reservados.</span>
-            <span>Monitoreo inteligente del consumo energético</span>
+            <span>(c) 2026 EcoWatt. Todos los derechos reservados.</span>
+            <span>Monitoreo inteligente del consumo energetico</span>
           </div>
         </footer>
       </body>

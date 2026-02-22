@@ -8,14 +8,17 @@ import {
   METER_PRODUCTS,
   PLAN_CONFIG,
   clearCheckoutDraft,
+  clearCheckoutIdempotencyDraft,
   clearPurchaseCart,
   meterHardwareTotal,
   normalizeCart,
   overallTotal,
   readCheckoutDraft,
+  readCheckoutIdempotencyDraft,
   readPurchaseCart,
   totalMeters,
   writeCheckoutDraft,
+  writeCheckoutIdempotencyDraft,
 } from "@/lib/purchase";
 
 function money(n: number) {
@@ -25,6 +28,24 @@ function money(n: number) {
   }).format(n);
 }
 
+function createIdempotencyKey() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `checkout_${crypto.randomUUID()}`;
+  }
+  return `checkout_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+}
+
+type SubmittedOrder = {
+  requestId: number | null;
+  plan: string;
+  metersTotal: number;
+  total: number;
+  buyerEmail: string;
+  buyerPhone: string;
+  submittedAt: string;
+  idempotentReplay: boolean;
+};
+
 export default function CheckoutPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [cart, setCart] = useState(() => readPurchaseCart());
@@ -33,6 +54,7 @@ export default function CheckoutPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [requestId, setRequestId] = useState<number | null>(null);
+  const [submittedOrder, setSubmittedOrder] = useState<SubmittedOrder | null>(null);
 
   useEffect(() => {
     function onResize() {
@@ -71,9 +93,9 @@ export default function CheckoutPage() {
       return "Falta completar el Paso 1 y Paso 2 en el carrito.";
     }
 
-    if (!form.fullName.trim()) return "Completá nombre y apellido.";
+    if (!form.fullName.trim()) return "Completa nombre y apellido.";
     if (!form.phone.trim()) return "Completá teléfono.";
-    if (!form.email.trim()) return "Completá email.";
+    if (!form.email.trim()) return "Completa email.";
     if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) return "El email no es válido.";
     if (!form.documentNumber.trim()) return "Completá DNI o CUIT.";
     if (!form.address.trim()) return "Completá dirección.";
@@ -93,6 +115,7 @@ export default function CheckoutPage() {
     setErrorMessage(null);
     setSuccessMessage(null);
     setRequestId(null);
+    setSubmittedOrder(null);
 
     const validation = validate();
     if (validation) {
@@ -105,11 +128,13 @@ export default function CheckoutPage() {
       return;
     }
 
-    const payload = {
+    const payloadBase = {
       plan: cart.plan,
       meters: {
         plug: cart.meters.plug,
-        panel: cart.meters.panel,
+        panel_1f: cart.meters.panel_1f,
+        panel_3f: cart.meters.panel_3f,
+        extra_phase: cart.meters.extra_phase,
       },
       buyer: {
         full_name: form.fullName.trim(),
@@ -120,6 +145,19 @@ export default function CheckoutPage() {
         address: form.address.trim(),
         property_type: form.propertyType,
       },
+    };
+
+    const fingerprint = JSON.stringify(payloadBase);
+    const previousIdempotency = readCheckoutIdempotencyDraft();
+    const idempotencyKey =
+      previousIdempotency && previousIdempotency.fingerprint === fingerprint
+        ? previousIdempotency.key
+        : createIdempotencyKey();
+    writeCheckoutIdempotencyDraft({ fingerprint, key: idempotencyKey });
+
+    const payload = {
+      ...payloadBase,
+      idempotency_key: idempotencyKey,
     };
 
     try {
@@ -133,6 +171,7 @@ export default function CheckoutPage() {
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
         request_id?: number;
+        idempotent_replay?: boolean;
         error?: string;
       };
 
@@ -140,17 +179,75 @@ export default function CheckoutPage() {
         throw new Error(data.error || "No se pudo enviar la solicitud.");
       }
 
-      setRequestId(typeof data.request_id === "number" ? data.request_id : null);
+      const nextRequestId = typeof data.request_id === "number" ? data.request_id : null;
+      setRequestId(nextRequestId);
       setSuccessMessage("Formulario enviado correctamente. Te contactaremos a la brevedad.");
+      setSubmittedOrder({
+        requestId: nextRequestId,
+        plan: cart.plan,
+        metersTotal: selectedMeters,
+        total: summary.total,
+        buyerEmail: payloadBase.buyer.email,
+        buyerPhone: payloadBase.buyer.phone,
+        submittedAt: new Date().toISOString(),
+        idempotentReplay: Boolean(data.idempotent_replay),
+      });
       clearCheckoutDraft();
+      clearCheckoutIdempotencyDraft();
       clearPurchaseCart();
       setForm({ ...DEFAULT_BUYER_FORM });
-      setCart({ plan: null, meters: { plug: 0, panel: 0 } });
+      setCart({ plan: null, meters: { plug: 0, panel_1f: 0, panel_3f: 0, extra_phase: 0 } });
     } catch (error: unknown) {
       setErrorMessage(error instanceof Error ? error.message : "No se pudo enviar la solicitud.");
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (submittedOrder) {
+    return (
+      <div style={{ maxWidth: "980px", margin: "0 auto", padding: isMobile ? "18px" : "36px" }}>
+        <section style={successScreenCard}>
+          <div style={successChip}>Solicitud enviada</div>
+          <h1 style={{ marginTop: "10px", marginBottom: "8px", fontSize: isMobile ? "30px" : "42px" }}>
+            Confirmación de compra
+          </h1>
+          <p style={{ marginTop: 0, color: "#475569", marginBottom: "16px" }}>
+            Recibimos tus datos correctamente. Nuestro equipo se va a contactar para continuar con
+            la gestión.
+          </p>
+
+          <div style={{ display: "grid", gap: "10px", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr" }}>
+            <SummaryCard label="Solicitud" value={submittedOrder.requestId ? `#${submittedOrder.requestId}` : "-"} />
+            <SummaryCard label="Plan" value={submittedOrder.plan} />
+            <SummaryCard label="Medidores" value={String(submittedOrder.metersTotal)} />
+            <SummaryCard label="Total inicial" value={money(submittedOrder.total)} />
+            <SummaryCard label="Email de contacto" value={submittedOrder.buyerEmail} />
+            <SummaryCard label="Teléfono de contacto" value={submittedOrder.buyerPhone} />
+            <SummaryCard
+              label="Fecha de envío"
+              value={new Date(submittedOrder.submittedAt).toLocaleString("es-AR")}
+            />
+            <SummaryCard
+              label="Estado del envío"
+              value={submittedOrder.idempotentReplay ? "Reintento detectado (sin duplicado)" : "Registrado"}
+            />
+          </div>
+
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "16px" }}>
+            <Link href="/soporte" style={linkButton}>
+              Contactar soporte
+            </Link>
+            <Link href="/carrito" style={secondaryLink}>
+              Cargar otra solicitud
+            </Link>
+            <Link href="/" style={secondaryLink}>
+              Volver al inicio
+            </Link>
+          </div>
+        </section>
+      </div>
+    );
   }
 
   return (
@@ -300,9 +397,21 @@ export default function CheckoutPage() {
               </strong>
             </div>
             <div style={lineItem}>
-              <span>EcoWatt Panel</span>
+              <span>EcoWatt Panel 1F</span>
               <strong>
-                {cart.meters.panel} x {money(METER_PRODUCTS.panel.price)}
+                {cart.meters.panel_1f} x {money(METER_PRODUCTS.panel_1f.price)}
+              </strong>
+            </div>
+            <div style={lineItem}>
+              <span>EcoWatt Panel 3F</span>
+              <strong>
+                {cart.meters.panel_3f} x {money(METER_PRODUCTS.panel_3f.price)}
+              </strong>
+            </div>
+            <div style={lineItem}>
+              <span>Fase extra</span>
+              <strong>
+                {cart.meters.extra_phase} x {money(METER_PRODUCTS.extra_phase.price)}
               </strong>
             </div>
             <div style={lineItem}>
@@ -339,6 +448,43 @@ function Field(props: { label: string; children: React.ReactNode }) {
     </label>
   );
 }
+
+function SummaryCard(props: { label: string; value: string }) {
+  return (
+    <div
+      style={{
+        border: "1px solid #e2e8f0",
+        borderRadius: "12px",
+        padding: "10px 12px",
+        background: "white",
+      }}
+    >
+      <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "4px" }}>{props.label}</div>
+      <div style={{ fontSize: "15px", color: "#0f172a", fontWeight: 600, wordBreak: "break-word" }}>
+        {props.value}
+      </div>
+    </div>
+  );
+}
+
+const successScreenCard: React.CSSProperties = {
+  border: "1px solid #bae6fd",
+  borderRadius: "18px",
+  padding: "20px",
+  background: "linear-gradient(180deg, #f0f9ff 0%, #ffffff 100%)",
+  boxShadow: "0 18px 38px rgba(15, 23, 42, 0.08)",
+};
+
+const successChip: React.CSSProperties = {
+  display: "inline-block",
+  border: "1px solid #86efac",
+  background: "#ecfdf3",
+  color: "#166534",
+  borderRadius: "999px",
+  padding: "6px 12px",
+  fontSize: "12px",
+  fontWeight: 700,
+};
 
 const panel: React.CSSProperties = {
   border: "1px solid #e2e8f0",

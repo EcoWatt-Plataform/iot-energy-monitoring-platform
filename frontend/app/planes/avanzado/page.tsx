@@ -1,7 +1,6 @@
 export default function PlanAvanzadoPage() {
   return (
     <div style={{ padding: "32px" }}>
-      {/* HERO: imagen grande + texto arriba */}
       <div
         style={{
           position: "relative",
@@ -35,23 +34,21 @@ export default function PlanAvanzadoPage() {
             backdropFilter: "blur(6px)",
           }}
         >
-          <div style={{ fontSize: "12px", opacity: 0.95, marginBottom: "8px" }}>
-            Plan EcoWatt
-          </div>
+          <div style={{ fontSize: "12px", opacity: 0.95, marginBottom: "8px" }}>Plan EcoWatt</div>
 
-          <h1 style={{ fontSize: "32px", margin: 0, marginBottom: "10px" }}>
-            Avanzado
-          </h1>
+          <h1 style={{ fontSize: "32px", margin: 0, marginBottom: "6px" }}>Avanzado</h1>
+          <div style={{ fontSize: "22px", fontWeight: 800, marginBottom: "10px" }}>ARS 12.900/mes</div>
 
           <p style={{ lineHeight: 1.6, margin: 0, marginBottom: "14px", opacity: 0.95 }}>
-            Todo lo del plan Básico, con más capacidad para hogares con varios equipos.
+            Incluye todo Basico y escala para hogares con mas consumo.
           </p>
 
           <ul style={{ margin: 0, lineHeight: 1.7 }}>
-            <li>Hasta 3 medidores asociados</li>
-            <li>Historial de 12 meses</li>
+            <li>Hasta 3 medidores</li>
+            <li>Historial 12 meses</li>
             <li>Comparativas entre dispositivos</li>
             <li>Alertas simples</li>
+            <li>Sin exportaciones</li>
           </ul>
 
           <div style={{ marginTop: "14px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
@@ -87,11 +84,8 @@ export default function PlanAvanzadoPage() {
         </div>
       </div>
 
-      {/* INFO DEL PLAN */}
       <div style={{ maxWidth: "1100px", margin: "40px auto 0" }}>
-        <h2 style={{ fontSize: "26px", marginBottom: "12px" }}>
-          ¿Qué incluye el Plan Avanzado?
-        </h2>
+        <h2 style={{ fontSize: "26px", marginBottom: "12px" }}>¿Qué incluye el Plan Avanzado?</h2>
 
         <div
           style={{
@@ -103,21 +97,11 @@ export default function PlanAvanzadoPage() {
           <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
             <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Incluye</h3>
             <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
-              <li>Todo lo del plan Básico</li>
+              <li>Todo lo del plan Basico</li>
               <li>Hasta 3 medidores por cuenta</li>
-              <li>Dashboard diario, semanal y mensual</li>
-              <li>Comparativas entre medidores</li>
+              <li>Comparativas</li>
               <li>Historial de 12 meses</li>
-              <li>Alertas simples por umbral mensual</li>
-            </ul>
-          </div>
-
-          <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
-            <h3 style={{ marginTop: 0, marginBottom: "10px" }}>¿Para quién sirve?</h3>
-            <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
-              <li>Para hogares con varios electrodomésticos</li>
-              <li>Para comparar consumos entre equipos</li>
-              <li>Para seguir tendencias durante todo el año</li>
+              <li>Sin exportaciones CSV/PDF/Excel</li>
             </ul>
           </div>
 
@@ -129,109 +113,15 @@ export default function PlanAvanzadoPage() {
               <li>Se habilitan comparativas</li>
             </ul>
           </div>
-        </div>
-      </div>
 
-      {/* SECCION APP */}
-      <div style={{ maxWidth: "1100px", margin: "56px auto 0" }}>
-        <div
-          style={{
-            display: "flex",
-            gap: "32px",
-            alignItems: "center",
-            justifyContent: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ maxWidth: "360px", flex: "1 1 260px" }}>
-            <h2 style={{ fontSize: "28px", marginBottom: "12px" }}>
-              La app en el plan Avanzado
-            </h2>
-            <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
-              Mirá más contexto histórico y compara medidores para detectar oportunidades de ahorro.
-            </p>
+          <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
+            <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Ideal para</h3>
+            <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
+              <li>Hogares con varios equipos</li>
+              <li>Usuarios que comparan consumos</li>
+              <li>Seguimiento anual de tendencias</li>
+            </ul>
           </div>
-
-          <div style={{ flex: "1 1 280px", display: "flex", justifyContent: "center" }}>
-            <img
-              src="/medio-app.png"
-              alt="Aplicacion EcoWatt - Plan Avanzado"
-              style={{
-                width: "320px",
-                maxWidth: "100%",
-                height: "auto",
-                borderRadius: "16px",
-                border: "1px solid #eee",
-              }}
-            />
-          </div>
-
-          <div style={{ maxWidth: "360px", flex: "1 1 260px" }}>
-            <div style={{ marginBottom: "18px" }}>
-              <h3 style={{ fontSize: "18px", marginBottom: "6px" }}>
-                Hasta 3 medidores
-              </h3>
-              <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
-                Controla varios puntos de consumo en una sola cuenta.
-              </p>
-            </div>
-
-            <div style={{ marginBottom: "18px" }}>
-              <h3 style={{ fontSize: "18px", marginBottom: "6px" }}>
-                Comparativas
-              </h3>
-              <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
-                Compará dispositivos para saber cuáles consumen más y en qué período.
-              </p>
-            </div>
-
-            <div>
-              <h3 style={{ fontSize: "18px", marginBottom: "6px" }}>
-                Historial y alertas
-              </h3>
-              <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
-                Revisá 12 meses y recibí alertas simples cuando un medidor supera su umbral.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            marginTop: "36px",
-            display: "flex",
-            gap: "12px",
-            justifyContent: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <a
-            href="/planes"
-            style={{
-              display: "inline-block",
-              padding: "12px 16px",
-              borderRadius: "10px",
-              border: "1px solid #ddd",
-              textDecoration: "none",
-              color: "black",
-            }}
-          >
-            Volver a planes
-          </a>
-
-          <a
-            href="/login"
-            style={{
-              display: "inline-block",
-              padding: "12px 16px",
-              borderRadius: "10px",
-              textDecoration: "none",
-              color: "black",
-              background: "linear-gradient(90deg, #6992eb, #9b6ceb)",
-            }}
-          >
-            Elegir este plan
-          </a>
         </div>
       </div>
     </div>

@@ -1,7 +1,6 @@
 export default function PlanPremiumPage() {
   return (
     <div style={{ padding: "32px" }}>
-      {/* HERO: imagen grande + texto arriba (sin recuadro) */}
       <div
         style={{
           position: "relative",
@@ -10,10 +9,9 @@ export default function PlanPremiumPage() {
           border: "1px solid #eee",
         }}
       >
-        {/* Imagen como background para poder mover encuadre */}
         <img
-          src="/basico.jpeg" // <-- si tu archivo es .jpg o .jpeg, cambialo acá
-          alt="Plan Básico EcoWatt"
+          src="/premium.jpeg"
+          alt="Plan Premium EcoWatt"
           style={{
             width: "100%",
             height: "420px",
@@ -22,13 +20,12 @@ export default function PlanPremiumPage() {
           }}
         />
 
-        {/* Texto arriba a la derecha (sin caja) */}
         <div
           style={{
             position: "absolute",
             top: "22px",
             right: "22px",
-            width: "min(420px, 92%)",
+            width: "min(430px, 92%)",
             padding: "22px",
             textAlign: "left",
             background: "rgba(255, 255, 255, 0.92)",
@@ -37,22 +34,21 @@ export default function PlanPremiumPage() {
             backdropFilter: "blur(6px)",
           }}
         >
-          <div style={{ fontSize: "12px", opacity: 0.95, marginBottom: "8px" }}>
-            Plan EcoWatt
-          </div>
+          <div style={{ fontSize: "12px", opacity: 0.95, marginBottom: "8px" }}>Plan EcoWatt</div>
 
-          <h1 style={{ fontSize: "32px", margin: 0, marginBottom: "10px" }}>
-            Premium
-          </h1>
+          <h1 style={{ fontSize: "32px", margin: 0, marginBottom: "6px" }}>Premium</h1>
+          <div style={{ fontSize: "22px", fontWeight: 800, marginBottom: "10px" }}>ARS 19.900/mes</div>
 
           <p style={{ lineHeight: 1.6, margin: 0, marginBottom: "14px", opacity: 0.95 }}>
-            Para monitoreo completo: más historial y funciones avanzadas para ahorrar al máximo.
+            Plan completo para mayor capacidad y exportacion de datos.
           </p>
 
           <ul style={{ margin: 0, lineHeight: 1.7 }}>
-            <li>Historial extendido (12 meses)</li>
+            <li>Hasta 6 medidores</li>
+            <li>Comparativas avanzadas</li>
             <li>Alertas avanzadas</li>
-            <li>Reportes detallados</li>
+            <li>Exportaciones CSV/PDF/Excel</li>
+            <li>Exportaciones exclusivas Premium</li>
           </ul>
 
           <div style={{ marginTop: "14px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
@@ -88,11 +84,8 @@ export default function PlanPremiumPage() {
         </div>
       </div>
 
-      {/* INFO DEL PLAN */}
       <div style={{ maxWidth: "1100px", margin: "40px auto 0" }}>
-        <h2 style={{ fontSize: "26px", marginBottom: "12px" }}>
-          ¿Qué incluye el Plan Premium?
-        </h2>
+        <h2 style={{ fontSize: "26px", marginBottom: "12px" }}>¿Qué incluye el Plan Premium?</h2>
 
         <div
           style={{
@@ -101,136 +94,34 @@ export default function PlanPremiumPage() {
             gap: "18px",
           }}
         >
-          {/* Incluye */}
           <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
             <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Incluye</h3>
             <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
-              <li>Monitoreo en tiempo real</li>
-              <li>Historial extendido (hasta 12 meses)</li>
-              <li>Gráficos avanzados y comparativas</li>
-              <li>Alertas avanzadas ante consumos anómalos</li>
-              <li>Reportes detallados (descargables)</li>
+              <li>Todo lo del plan Avanzado</li>
+              <li>Hasta 6 medidores por cuenta</li>
+              <li>Comparativas avanzadas</li>
+              <li>Alertas avanzadas</li>
+              <li>Exportaciones CSV/PDF/Excel</li>
             </ul>
           </div>
 
-          {/* Para quién */}
-          <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
-            <h3 style={{ marginTop: 0, marginBottom: "10px" }}>¿Para quién sirve?</h3>
-            <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
-              <li>Para hogares grandes o muchos dispositivos</li>
-              <li>Para usuarios que quieren máximo control</li>
-              <li>Para analizar consumo y costos en detalle</li>
-            </ul>
-          </div>
-
-          {/* Comparado con Avanzado */}
           <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
             <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Comparado con Avanzado</h3>
             <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
-              <li>Más historial</li>
-              <li>Alertas y reportes avanzados</li>
+              <li>De 3 a 6 medidores</li>
+              <li>Exportaciones exclusivas</li>
+              <li>Alertas de mayor nivel</li>
             </ul>
           </div>
-        </div>
-      </div>
 
-      {/* SECCIÓN “APP” estilo: texto izq + imagen medio + texto der */}
-      <div style={{ maxWidth: "1100px", margin: "56px auto 0" }}>
-        <div
-          style={{
-            display: "flex",
-            gap: "32px",
-            alignItems: "center",
-            justifyContent: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          {/* IZQUIERDA */}
-          <div style={{ maxWidth: "360px", flex: "1 1 260px" }}>
-            <h2 style={{ fontSize: "28px", marginBottom: "12px" }}>
-              La app en el plan Premium
-            </h2>
-            <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
-              Análisis completo: alertas, comparativas, reportes y un historial amplio para tomar decisiones con datos.
-            </p>
+          <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
+            <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Ideal para</h3>
+            <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
+              <li>Usuarios con mayor volumen de medicion</li>
+              <li>Equipos que necesitan reportes</li>
+              <li>Analisis y auditoria energetica</li>
+            </ul>
           </div>
-
-          {/* MEDIO (CELULAR) */}
-          <div style={{ flex: "1 1 280px", display: "flex", justifyContent: "center" }}>
-            <img
-              src="/medio-app.png" // <-- tu imagen del celular
-              alt="Aplicación EcoWatt - Plan Premium"
-              style={{
-                width: "320px",
-                maxWidth: "100%",
-                height: "auto",
-                borderRadius: "16px",
-                border: "1px solid #eee",
-              }}
-            />
-          </div>
-
-          {/* DERECHA (premium: más completo) */}
-          <div style={{ maxWidth: "360px", flex: "1 1 260px" }}>
-            <div style={{ marginBottom: "18px" }}>
-              <h3 style={{ fontSize: "18px", marginBottom: "6px" }}>Alertas avanzadas</h3>
-              <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
-                Detectá consumos anómalos y recibí notificaciones para actuar rápido.
-              </p>
-            </div>
-
-            <div style={{ marginBottom: "18px" }}>
-              <h3 style={{ fontSize: "18px", marginBottom: "6px" }}>Comparativas completas</h3>
-              <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
-                Compará dispositivos y períodos para identificar oportunidades de ahorro.
-              </p>
-            </div>
-
-            <div>
-              <h3 style={{ fontSize: "18px", marginBottom: "6px" }}>Reportes detallados</h3>
-              <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
-                Obtené reportes listos para revisar (y luego exportar) con tus métricas principales.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            marginTop: "36px",
-            display: "flex",
-            gap: "12px",
-            justifyContent: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <a
-            href="/planes"
-            style={{
-              display: "inline-block",
-              padding: "12px 16px",
-              borderRadius: "10px",
-              border: "1px solid #ddd",
-              textDecoration: "none",
-              color: "black",
-            }}
-          >
-            Volver a planes
-          </a>
-
-          <a
-            href="/login"
-            style={{
-              display: "inline-block",
-              padding: "12px 16px",
-              borderRadius: "10px",
-              textDecoration: "none",
-              color: "black",
-              background: "linear-gradient(90deg, #6992eb, #9b6ceb)",
-            }}
-          >
-            Elegir este plan
-          </a>
         </div>
       </div>
     </div>
