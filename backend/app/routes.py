@@ -265,6 +265,7 @@ _CHECKOUT_RATE_LIMIT = 5
 _CHECKOUT_RATE_WINDOW = 60  # seconds
 _CHECKOUT_MAX_IPS = 10000   # evict expired entries when dict exceeds this size
 _CHECKOUT_IDEMPOTENCY_KEY_MAX_LEN = 120
+_CHECKOUT_REQUEST_STATUSES = {"pendiente", "contactado", "cerrado", "descartado"}
 _checkout_ip_timestamps: dict[str, list[float]] = {}
 _checkout_rate_lock = threading.Lock()
 
@@ -806,6 +807,178 @@ def admin_list_users():
         "per_page": per_page,
         "total": payload.get("total", len(out)),
     })
+
+
+def _serialize_checkout_request(row: sqlite3.Row) -> dict:
+    return {
+        "id": int(row["id"]),
+        "status": str(row["status"]),
+        "plan": str(row["plan"]),
+        "plan_price_ars": int(row["plan_price_ars"]),
+        "max_meters": int(row["max_meters"]),
+        "plug_qty": int(row["plug_qty"]),
+        "panel_qty": int(row["panel_qty"]),
+        "panel_1f_qty": int(row["panel_1f_qty"]),
+        "panel_3f_qty": int(row["panel_3f_qty"]),
+        "extra_phase_qty": int(row["extra_phase_qty"]),
+        "meters_total": int(row["plug_qty"]) + int(row["panel_qty"]),
+        "hardware_total_ars": int(row["hardware_total_ars"]),
+        "total_ars": int(row["total_ars"]),
+        "buyer_full_name": str(row["buyer_full_name"]),
+        "buyer_phone": str(row["buyer_phone"]),
+        "buyer_email": str(row["buyer_email"]),
+        "buyer_document_type": str(row["buyer_document_type"]).upper(),
+        "buyer_document_number": str(row["buyer_document_number"]),
+        "buyer_address": str(row["buyer_address"]),
+        "property_type": str(row["property_type"]),
+        "idempotency_key": row["idempotency_key"],
+        "created_at": row["created_at"],
+    }
+
+
+@api_bp.get("/admin/checkout-requests")
+def admin_list_checkout_requests():
+    _, auth_error = _require_admin()
+    if auth_error:
+        return auth_error
+
+    raw_status = str(request.args.get("status") or "").strip().lower()
+    search = str(request.args.get("search") or "").strip().lower()
+    limit = request.args.get("limit", default=200, type=int) or 200
+    limit = min(500, max(1, limit))
+
+    status_filter: str | None = None
+    if raw_status and raw_status != "all":
+        if raw_status not in _CHECKOUT_REQUEST_STATUSES:
+            return jsonify({
+                "error": "status must be all, pendiente, contactado, cerrado or descartado"
+            }), 400
+        status_filter = raw_status
+
+    where_parts: list[str] = []
+    params: list[object] = []
+    if status_filter:
+        where_parts.append("status = ?")
+        params.append(status_filter)
+    if search:
+        like = f"%{search}%"
+        where_parts.append(
+            "("
+            "CAST(id AS TEXT) LIKE ? OR "
+            "lower(buyer_full_name) LIKE ? OR "
+            "lower(buyer_email) LIKE ? OR "
+            "lower(buyer_phone) LIKE ? OR "
+            "lower(buyer_document_number) LIKE ? OR "
+            "lower(buyer_address) LIKE ?"
+            ")"
+        )
+        params.extend([like, like, like, like, like, like])
+
+    where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
+    query = f"""
+        SELECT
+            id,
+            status,
+            plan,
+            plan_price_ars,
+            max_meters,
+            plug_qty,
+            panel_qty,
+            panel_1f_qty,
+            panel_3f_qty,
+            extra_phase_qty,
+            hardware_total_ars,
+            total_ars,
+            buyer_full_name,
+            buyer_phone,
+            buyer_email,
+            buyer_document_type,
+            buyer_document_number,
+            buyer_address,
+            property_type,
+            idempotency_key,
+            created_at
+        FROM checkout_requests
+        {where_sql}
+        ORDER BY datetime(created_at) DESC, id DESC
+        LIMIT ?
+    """
+    params.append(limit)
+
+    with get_con(_db_path()) as con:
+        rows = con.execute(query, tuple(params)).fetchall()
+
+    out = [_serialize_checkout_request(row) for row in rows]
+    return jsonify({
+        "requests": out,
+        "total": len(out),
+        "limit": limit,
+        "status": status_filter or "all",
+    })
+
+
+@api_bp.patch("/admin/checkout-requests/<int:request_id>")
+def admin_update_checkout_request(request_id: int):
+    _, auth_error = _require_admin()
+    if auth_error:
+        return auth_error
+
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "invalid JSON payload"}), 400
+
+    status = str(data.get("status") or "").strip().lower()
+    if status not in _CHECKOUT_REQUEST_STATUSES:
+        return jsonify({
+            "error": "status must be pendiente, contactado, cerrado or descartado"
+        }), 400
+
+    with get_con(_db_path()) as con:
+        exists = con.execute(
+            "SELECT id FROM checkout_requests WHERE id = ?",
+            (request_id,),
+        ).fetchone()
+        if exists is None:
+            return jsonify({"error": "checkout request not found"}), 404
+
+        con.execute(
+            "UPDATE checkout_requests SET status = ? WHERE id = ?",
+            (status, request_id),
+        )
+        row = con.execute(
+            """
+            SELECT
+                id,
+                status,
+                plan,
+                plan_price_ars,
+                max_meters,
+                plug_qty,
+                panel_qty,
+                panel_1f_qty,
+                panel_3f_qty,
+                extra_phase_qty,
+                hardware_total_ars,
+                total_ars,
+                buyer_full_name,
+                buyer_phone,
+                buyer_email,
+                buyer_document_type,
+                buyer_document_number,
+                buyer_address,
+                property_type,
+                idempotency_key,
+                created_at
+            FROM checkout_requests
+            WHERE id = ?
+            LIMIT 1
+            """,
+            (request_id,),
+        ).fetchone()
+
+    if row is None:
+        return jsonify({"error": "checkout request not found"}), 404
+    return jsonify(_serialize_checkout_request(row))
 
 
 @api_bp.post("/admin/users")
