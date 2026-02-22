@@ -1283,7 +1283,7 @@ export default function DashboardPage() {
           />
           {!planLoading && planHistoryMonths !== null && (
             <span style={{ marginTop: "4px", fontSize: "11px", color: "#64748b" }}>
-              Historial disponible: ultimos {planHistoryMonths} meses.
+              Historial disponible: últimos {planHistoryMonths} meses.
             </span>
           )}
         </div>

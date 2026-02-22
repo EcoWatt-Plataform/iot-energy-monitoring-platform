@@ -44,7 +44,7 @@ export default function PlanAvanzadoPage() {
           </h1>
 
           <p style={{ lineHeight: 1.6, margin: 0, marginBottom: "14px", opacity: 0.95 }}>
-            Todo lo del plan Basico, con mas capacidad para hogares con varios equipos.
+            Todo lo del plan Básico, con más capacidad para hogares con varios equipos.
           </p>
 
           <ul style={{ margin: 0, lineHeight: 1.7 }}>
@@ -90,7 +90,7 @@ export default function PlanAvanzadoPage() {
       {/* INFO DEL PLAN */}
       <div style={{ maxWidth: "1100px", margin: "40px auto 0" }}>
         <h2 style={{ fontSize: "26px", marginBottom: "12px" }}>
-          Que incluye el Plan Avanzado?
+          ¿Qué incluye el Plan Avanzado?
         </h2>
 
         <div
@@ -103,7 +103,7 @@ export default function PlanAvanzadoPage() {
           <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
             <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Incluye</h3>
             <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
-              <li>Todo lo del plan Basico</li>
+              <li>Todo lo del plan Básico</li>
               <li>Hasta 3 medidores por cuenta</li>
               <li>Dashboard diario, semanal y mensual</li>
               <li>Comparativas entre medidores</li>
@@ -113,16 +113,16 @@ export default function PlanAvanzadoPage() {
           </div>
 
           <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
-            <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Para quien sirve?</h3>
+            <h3 style={{ marginTop: 0, marginBottom: "10px" }}>¿Para quién sirve?</h3>
             <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
-              <li>Para hogares con varios electrodomesticos</li>
+              <li>Para hogares con varios electrodomésticos</li>
               <li>Para comparar consumos entre equipos</li>
-              <li>Para seguir tendencias durante todo el anio</li>
+              <li>Para seguir tendencias durante todo el año</li>
             </ul>
           </div>
 
           <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
-            <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Comparado con Basico</h3>
+            <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Comparado con Básico</h3>
             <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
               <li>De 1 a 3 medidores</li>
               <li>De 3 a 12 meses de historial</li>
@@ -148,7 +148,7 @@ export default function PlanAvanzadoPage() {
               La app en el plan Avanzado
             </h2>
             <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
-              Mira mas contexto historico y compara medidores para detectar oportunidades de ahorro.
+              Mirá más contexto histórico y compara medidores para detectar oportunidades de ahorro.
             </p>
           </div>
 
@@ -181,7 +181,7 @@ export default function PlanAvanzadoPage() {
                 Comparativas
               </h3>
               <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
-                Compara dispositivos para saber cuales consumen mas y en que periodo.
+                Compará dispositivos para saber cuáles consumen más y en qué período.
               </p>
             </div>
 
@@ -190,7 +190,7 @@ export default function PlanAvanzadoPage() {
                 Historial y alertas
               </h3>
               <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
-                Revisa 12 meses y recibe alertas simples cuando un medidor supera su umbral.
+                Revisá 12 meses y recibí alertas simples cuando un medidor supera su umbral.
               </p>
             </div>
           </div>

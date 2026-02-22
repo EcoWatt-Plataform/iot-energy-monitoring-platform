@@ -47,7 +47,7 @@ export default function PlanesPage() {
           imageSrc="/avanzado.jpeg"
           tagline="Para hogares"
           features={[
-            "Basico + hasta 3 medidores",
+            "Básico + hasta 3 medidores",
             "Historial de 12 meses",
             "Comparativas entre dispositivos",
             "Alertas simples",

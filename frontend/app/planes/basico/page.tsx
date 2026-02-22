@@ -12,7 +12,7 @@ export default function PlanBasicoPage() {
       >
         <img
           src="/basico.jpeg"
-          alt="Plan Basico EcoWatt"
+          alt="Plan Básico EcoWatt"
           style={{
             width: "100%",
             height: "420px",
@@ -41,7 +41,7 @@ export default function PlanBasicoPage() {
           </div>
 
           <h1 style={{ fontSize: "32px", margin: 0, marginBottom: "10px" }}>
-            Basico
+            Básico
           </h1>
 
           <p style={{ lineHeight: 1.6, margin: 0, marginBottom: "14px", opacity: 0.95 }}>
@@ -91,7 +91,7 @@ export default function PlanBasicoPage() {
       {/* INFO DEL PLAN */}
       <div style={{ maxWidth: "1100px", margin: "40px auto 0" }}>
         <h2 style={{ fontSize: "26px", marginBottom: "12px" }}>
-          Que incluye el Plan Basico?
+          ¿Qué incluye el Plan Básico?
         </h2>
 
         <div
@@ -115,10 +115,10 @@ export default function PlanBasicoPage() {
 
           {/* Para quien */}
           <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "18px" }}>
-            <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Para quien sirve?</h3>
+            <h3 style={{ marginTop: 0, marginBottom: "10px" }}>¿Para quién sirve?</h3>
             <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
               <li>Para probar EcoWatt por primera vez</li>
-              <li>Para monitorear un electrodomestico especifico</li>
+              <li>Para monitorear un electrodoméstico específico</li>
               <li>Para un hogar chico o un departamento</li>
             </ul>
           </div>
@@ -128,7 +128,7 @@ export default function PlanBasicoPage() {
             <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Limitaciones</h3>
             <ul style={{ margin: 0, paddingLeft: "18px", color: "#333", lineHeight: 1.7 }}>
               <li>Maximo 1 medidor por cuenta</li>
-              <li>Sin graficos semanales ni comparativo</li>
+              <li>Sin gráficos semanales ni comparativo</li>
               <li>Sin exportaciones CSV avanzadas</li>
             </ul>
           </div>
@@ -148,7 +148,7 @@ export default function PlanBasicoPage() {
         >
           {/* IZQUIERDA */}
           <div style={{ maxWidth: "360px", flex: "1 1 260px" }}>
-            <h2 style={{ fontSize: "28px", marginBottom: "12px" }}>La app en el plan Basico</h2>
+            <h2 style={{ fontSize: "28px", marginBottom: "12px" }}>La app en el plan Básico</h2>
             <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
               Visualiza lo esencial con 1 medidor, historial de 3 meses y panel diario/mensual.
             </p>
@@ -158,7 +158,7 @@ export default function PlanBasicoPage() {
           <div style={{ flex: "1 1 280px", display: "flex", justifyContent: "center" }}>
             <img
               src="/medio-app.png"
-              alt="Aplicacion EcoWatt - Plan Basico"
+              alt="Aplicación EcoWatt - Plan Básico"
               style={{
                 width: "320px",
                 maxWidth: "100%",
@@ -174,21 +174,21 @@ export default function PlanBasicoPage() {
             <div style={{ marginBottom: "18px" }}>
               <h3 style={{ fontSize: "18px", marginBottom: "6px" }}>Consumo en vivo</h3>
               <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
-                Mira en tiempo real cuanto esta consumiendo el medidor asociado.
+                Mirá en tiempo real cuánto está consumiendo el medidor asociado.
               </p>
             </div>
 
             <div style={{ marginBottom: "18px" }}>
               <h3 style={{ fontSize: "18px", marginBottom: "6px" }}>Dashboard diario y mensual</h3>
               <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
-                Alterna entre vista diaria y mensual para seguir la evolucion del consumo.
+                Alterna entre vista diaria y mensual para seguir la evolución del consumo.
               </p>
             </div>
 
             <div>
               <h3 style={{ fontSize: "18px", marginBottom: "6px" }}>Alertas simples e historial</h3>
               <p style={{ color: "#555", lineHeight: 1.6, margin: 0 }}>
-                Consulta hasta 3 meses y activa alertas por umbral mensual de energia.
+                Consulta hasta 3 meses y activa alertas por umbral mensual de energía.
               </p>
             </div>
           </div>
