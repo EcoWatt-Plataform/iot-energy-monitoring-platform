@@ -79,6 +79,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base-url", default="http://127.0.0.1:5000")
     ap.add_argument("--db", default="data/sisterna.sqlite")
+    ap.add_argument(
+        "--owner-user-id",
+        default="",
+        help="Filtra dispositivos por owner_user_id (Supabase auth.users.id).",
+    )
     ap.add_argument("--days", type=int, default=14)
     ap.add_argument("--interval-minutes", type=int, default=60)
     ap.add_argument("--limit", type=int, default=5)
@@ -87,14 +92,31 @@ def main():
 
     con = sqlite3.connect(args.db)
     con.row_factory = sqlite3.Row
-    devs = con.execute("SELECT id, name, api_key FROM devices ORDER BY id ASC").fetchall()
+    owner_user_id = (args.owner_user_id or "").strip()
+    if owner_user_id:
+        devs = con.execute(
+            """
+            SELECT id, name, api_key
+            FROM devices
+            WHERE owner_user_id = ?
+            ORDER BY id ASC
+            """,
+            (owner_user_id,),
+        ).fetchall()
+    else:
+        devs = con.execute("SELECT id, name, api_key FROM devices ORDER BY id ASC").fetchall()
     con.close()
 
     if not devs:
-        print("No hay dispositivos en la DB. Crealos desde el admin primero.")
+        if owner_user_id:
+            print(f"No hay dispositivos para owner_user_id={owner_user_id}.")
+        else:
+            print("No hay dispositivos en la DB. Crealos desde el admin primero.")
         return
 
     devs = devs[: max(1, args.limit)]
+    if owner_user_id:
+        print(f"Filtrando por owner_user_id={owner_user_id}")
     print(f"Usando {len(devs)} dispositivos:")
     for d in devs:
         print(f"  id={d['id']} name={d['name']}")
