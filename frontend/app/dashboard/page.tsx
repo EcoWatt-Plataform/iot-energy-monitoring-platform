@@ -103,6 +103,12 @@ const PLAN_LABELS: Record<Plan, string> = {
   premium: "Premium",
 };
 
+const PLAN_HISTORY_MONTHS: Record<Plan, number | null> = {
+  basico: 3,
+  avanzado: 12,
+  premium: null,
+};
+
 function normalizePlan(value: unknown): Plan {
   const raw = String(value ?? "")
     .trim()
@@ -284,6 +290,15 @@ export default function DashboardPage() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null);
   const [month, setMonth] = useState<string>(toYYYYMM(new Date()));
+  const currentMonth = useMemo(() => toYYYYMM(new Date()), []);
+  const planHistoryMonths = PLAN_HISTORY_MONTHS[plan];
+  const planMinMonth = useMemo(() => {
+    if (planHistoryMonths === null) return null;
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - (planHistoryMonths - 1));
+    return toYYYYMM(d);
+  }, [planHistoryMonths]);
 
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
 
@@ -666,6 +681,16 @@ export default function DashboardPage() {
     refreshAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month, selectedDeviceId, devices.length]);
+
+  useEffect(() => {
+    if (planMinMonth !== null && month < planMinMonth) {
+      setMonth(planMinMonth);
+      return;
+    }
+    if (month > currentMonth) {
+      setMonth(currentMonth);
+    }
+  }, [currentMonth, month, planMinMonth]);
 
   /** =========================
    *  TRANSFORMACIONES
@@ -1113,8 +1138,8 @@ export default function DashboardPage() {
    *  REGLAS POR PLAN
    *  ========================= */
   const allowedPeriods: Period[] = useMemo(() => {
-    if (plan === "basico") return ["daily"];
-    if (plan === "avanzado") return ["daily", "weekly", "monthly"];
+    if (plan === "basico") return ["daily", "monthly"];
+    if (plan === "avanzado") return ["daily", "weekly", "monthly", "compare"];
     return ["daily", "weekly", "monthly", "compare"]; // premium
   }, [plan]);
 
@@ -1130,8 +1155,8 @@ export default function DashboardPage() {
     return () => window.clearTimeout(timeoutId);
   }, [tokenCopyMessage]);
 
-  // Alertas según plan
-  const canSeeAlerts = plan !== "basico";
+  // Alertas simples disponibles en todos los planes.
+  const canSeeAlerts = true;
   // In admin view, disable plan-based download gating since the displayed plan is
   // the admin's own plan, not the impersonated user's. Exports are also blocked
   // on the backend when acting as another user.
@@ -1247,7 +1272,20 @@ export default function DashboardPage() {
       >
         <div className="dashboard-filter-field" style={{ display: "flex", flexDirection: "column" }}>
           <label style={{ fontSize: "12px", color: "#666" }}>Mes</label>
-          <input className="dashboard-control-input" type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={inputStyle} />
+          <input
+            className="dashboard-control-input"
+            type="month"
+            value={month}
+            min={planMinMonth ?? undefined}
+            max={currentMonth}
+            onChange={(e) => setMonth(e.target.value)}
+            style={inputStyle}
+          />
+          {!planLoading && planHistoryMonths !== null && (
+            <span style={{ marginTop: "4px", fontSize: "11px", color: "#64748b" }}>
+              Historial disponible: ultimos {planHistoryMonths} meses.
+            </span>
+          )}
         </div>
 
         <div className="dashboard-filter-field" style={{ display: "flex", flexDirection: "column" }}>
