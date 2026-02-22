@@ -33,7 +33,12 @@ export default function PlanesPage() {
           name="Básico"
           imageSrc="/basico.jpeg"
           tagline="Ideal para empezar"
-          features={["Consumo en tiempo real", "Historial básico"]}
+          features={[
+            "1 medidor asociado",
+            "Historial de 3 meses",
+            "Dashboard diario y mensual",
+            "Alertas simples",
+          ]}
           href="/planes/basico"
         />
 
@@ -41,7 +46,12 @@ export default function PlanesPage() {
           name="Avanzado"
           imageSrc="/avanzado.jpeg"
           tagline="Para hogares"
-          features={["Gráficos día/semana/mes", "Historial extendido",]}
+          features={[
+            "Basico + hasta 3 medidores",
+            "Historial de 12 meses",
+            "Comparativas entre dispositivos",
+            "Alertas simples",
+          ]}
           href="/planes/avanzado"
         />
 
@@ -249,3 +259,4 @@ function PlanCard(props: {
     </div>
   );
 }
+

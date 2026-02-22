@@ -58,29 +58,28 @@ function readStoredCart(): CartItem[] {
   }
 }
 
+function resolveQueryItem(): { id: ItemId; nombre: string; precio: number } | null {
+  const { plan, item } = getQueryParams();
+  if (plan) return PLANES[plan];
+  if (item === "dispositivo") return DISPOSITIVO;
+  return null;
+}
+
+function addItemToCart(cart: CartItem[], toAdd: { id: ItemId; nombre: string; precio: number }) {
+  const idx = cart.findIndex((x) => x.id === toAdd.id);
+  if (idx >= 0) {
+    return cart.map((x) =>
+      x.id === toAdd.id ? { ...x, cantidad: Math.min(99, x.cantidad + 1) } : x
+    );
+  }
+  return [...cart, { ...toAdd, cantidad: 1 }];
+}
+
 function getInitialCart(): CartItem[] {
   const cart = readStoredCart();
-
-  if (typeof window === "undefined") return cart;
-
-  const { plan, item } = getQueryParams();
-  if (!plan && !item) return cart;
-
-  let toAdd: { id: ItemId; nombre: string; precio: number } | null = null;
-  if (plan) toAdd = PLANES[plan];
-  if (item === "dispositivo") toAdd = DISPOSITIVO;
+  const toAdd = resolveQueryItem();
   if (!toAdd) return cart;
-
-  const idx = cart.findIndex((x) => x.id === toAdd.id);
-  const next =
-    idx >= 0
-      ? cart.map((x) =>
-          x.id === toAdd.id ? { ...x, cantidad: Math.min(99, x.cantidad + 1) } : x
-        )
-      : [...cart, { ...toAdd, cantidad: 1 }];
-
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  return next;
+  return addItemToCart(cart, toAdd);
 }
 
 function money(n: number) {
@@ -105,16 +104,20 @@ export default function CarritoPage() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Si viene ?plan=... o ?item=dispositivo, se limpia la query para no duplicar al refrescar.
+  // Persistir carrito en cada cambio de estado.
   useEffect(() => {
-    const { plan, item } = getQueryParams();
-    if (!plan && !item) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  }, [items]);
+
+  // Si viene ?plan=... o ?item=dispositivo, se limpia la query para no re-ejecutar al refrescar.
+  useEffect(() => {
+    const toAdd = resolveQueryItem();
+    if (!toAdd) return;
     window.history.replaceState({}, "", "/carrito");
   }, []);
 
   function guardar(nuevo: CartItem[]) {
     setItems(nuevo);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(nuevo));
   }
 
   function setCantidad(id: ItemId, cantidad: number) {

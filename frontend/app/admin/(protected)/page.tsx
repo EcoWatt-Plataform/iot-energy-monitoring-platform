@@ -144,9 +144,9 @@ export default function AdminPage() {
 
   async function getAccessToken() {
     const { data, error } = await supabase.auth.getSession();
-    if (error) throw new Error(error.message || "No se pudo validar la sesión.");
+    if (error) throw new Error(error.message || "No se pudo validar la sesion.");
     const token = data.session?.access_token;
-    if (!token) throw new Error("Sesión vencida. Iniciá sesión de nuevo.");
+    if (!token) throw new Error("Sesion vencida. Inicia sesion de nuevo.");
     return token;
   }
 
@@ -293,7 +293,7 @@ export default function AdminPage() {
       return;
     }
     if (password.length < 6) {
-      setErrorText("La contraseña debe tener al menos 6 caracteres.");
+      setErrorText("La contrasena debe tener al menos 6 caracteres.");
       return;
     }
 
@@ -351,17 +351,9 @@ export default function AdminPage() {
     }
   }
 
-  async function saveUserName(userId: string) {
-    const fullName = (draftNames[userId] || "").trim();
-    const currentUser = users.find((u) => u.id === userId);
-    const currentName = (currentUser?.full_name || "").trim();
-    if (fullName === currentName) return;
-    await updateUser(userId, { full_name: fullName || null });
-  }
-
   async function deleteUser(userId: string, email: string) {
     const confirmed = window.confirm(
-      `¿Eliminar la cuenta ${email}? Esta acción no se puede deshacer.`
+      `Eliminar la cuenta ${email}? Esta accion no se puede deshacer.`
     );
     if (!confirmed) return;
 
@@ -452,6 +444,11 @@ export default function AdminPage() {
     if (!user || !draft) return;
 
     const patch: UpdateUserPatch = {};
+    const nextFullName = (draftNames[userId] || "").trim() || null;
+    const currentFullName = (user.full_name || "").trim() || null;
+    if (nextFullName !== currentFullName) {
+      patch.full_name = nextFullName;
+    }
 
     const documentType = draft.document_type || null;
     if (documentType !== (user.document_type ?? null)) {
@@ -524,7 +521,7 @@ export default function AdminPage() {
         <div>
           <h1 style={{ margin: 0, fontSize: "32px" }}>Panel Admin</h1>
           <p style={{ margin: "8px 0 0", color: "#4b5563" }}>
-            Gestioná las cuentas registradas en la plataforma.
+            Gestiona las cuentas registradas en la plataforma.
           </p>
         </div>
 
@@ -533,7 +530,7 @@ export default function AdminPage() {
             {refreshing ? "Actualizando..." : "Refrescar"}
           </button>
           <button type="button" onClick={logout} style={ghostBtnStyle}>
-            Cerrar sesión
+            Cerrar sesion
           </button>
         </div>
       </div>
@@ -588,7 +585,7 @@ export default function AdminPage() {
           <input
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="Contraseña inicial"
+            placeholder="Contrasena inicial"
             type="password"
             style={inputStyle}
           />
@@ -609,13 +606,13 @@ export default function AdminPage() {
           <input
             value={newDocumentNumber}
             onChange={(e) => setNewDocumentNumber(e.target.value)}
-            placeholder="Número de documento"
+            placeholder="Numero de documento"
             style={inputStyle}
           />
           <input
             value={newPhone}
             onChange={(e) => setNewPhone(e.target.value)}
-            placeholder="Teléfono"
+            placeholder="Telefono"
             style={inputStyle}
           />
           <input
@@ -627,7 +624,7 @@ export default function AdminPage() {
           <input
             value={newAddress}
             onChange={(e) => setNewAddress(e.target.value)}
-            placeholder="Dirección (calle/altura)"
+            placeholder="Direccion (calle/altura)"
             style={inputStyle}
           />
           <input
@@ -645,7 +642,7 @@ export default function AdminPage() {
           <input
             value={newCountry}
             onChange={(e) => setNewCountry(e.target.value)}
-            placeholder="País"
+            placeholder="Pais"
             style={inputStyle}
           />
           <select value={newPlan} onChange={(e) => setNewPlan(e.target.value as Plan)} style={selectStyle}>
@@ -710,13 +707,13 @@ export default function AdminPage() {
                   <Th>Email</Th>
                   <Th>Nombre</Th>
                   <Th>Documento</Th>
-                  <Th>Teléfono</Th>
-                  <Th>Dirección</Th>
+                  <Th>Telefono</Th>
+                  <Th>Direccion</Th>
                   <Th>Plan</Th>
                   <Th>Rol</Th>
                   <Th>Dispositivos</Th>
                   <Th>Alta</Th>
-                  <Th>Último login</Th>
+                  <Th>Ultimo login</Th>
                   <Th>Acciones</Th>
                 </tr>
               </thead>
@@ -733,28 +730,7 @@ export default function AdminPage() {
                         </Td>
                         <Td>{user.email || "-"}</Td>
                         <Td>
-                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                            <input
-                              value={draftNames[user.id] ?? ""}
-                              onChange={(e) =>
-                                setDraftNames((prev) => ({ ...prev, [user.id]: e.target.value }))
-                              }
-                              disabled={busy}
-                              style={{
-                                ...inputStyle,
-                                padding: "7px 9px",
-                                fontSize: "13px",
-                              }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => saveUserName(user.id)}
-                              disabled={busy}
-                              style={secondaryActionBtnStyle}
-                            >
-                              Guardar
-                            </button>
-                          </div>
+                          {user.full_name || "-"}
                         </Td>
                         <Td>{formatDocument(user)}</Td>
                         <Td>{user.phone || "-"}</Td>
@@ -843,17 +819,15 @@ export default function AdminPage() {
                                 }}
                               >
                                 <DetailItem label="User ID" value={user.id} />
+                                <DetailItem label="Email" value={user.email || "-"} />
                                 <DetailItem
                                   label="Email confirmado"
                                   value={formatDate(user.email_confirmed_at)}
                                 />
+                                <DetailItem label="Alta" value={formatDate(user.created_at)} />
                                 <DetailItem
-                                  label="Fecha de nacimiento"
-                                  value={draft.birth_date || "-"}
-                                />
-                                <DetailItem
-                                  label="Dirección resumida"
-                                  value={formatAddress(user)}
+                                  label="Ultimo login"
+                                  value={formatDate(user.last_sign_in_at)}
                                 />
                               </div>
 
@@ -865,6 +839,19 @@ export default function AdminPage() {
                                   gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
                                 }}
                               >
+                                <div>
+                                  <div style={fieldLabelStyle}>Nombre completo</div>
+                                  <input
+                                    value={draftNames[user.id] ?? ""}
+                                    onChange={(e) =>
+                                      setDraftNames((prev) => ({ ...prev, [user.id]: e.target.value }))
+                                    }
+                                    disabled={busy}
+                                    placeholder="Nombre completo"
+                                    style={inputStyle}
+                                  />
+                                </div>
+
                                 <div>
                                   <div style={fieldLabelStyle}>Tipo de documento</div>
                                   <select
@@ -886,7 +873,7 @@ export default function AdminPage() {
                                 </div>
 
                                 <div>
-                                  <div style={fieldLabelStyle}>Número documento</div>
+                                  <div style={fieldLabelStyle}>Numero documento</div>
                                   <input
                                     value={draft.document_number}
                                     onChange={(e) =>
@@ -899,12 +886,12 @@ export default function AdminPage() {
                                 </div>
 
                                 <div>
-                                  <div style={fieldLabelStyle}>Teléfono</div>
+                                  <div style={fieldLabelStyle}>Telefono</div>
                                   <input
                                     value={draft.phone}
                                     onChange={(e) => setProfileField(user.id, "phone", e.target.value)}
                                     disabled={busy}
-                                    placeholder="Teléfono"
+                                    placeholder="Telefono"
                                     style={inputStyle}
                                   />
                                 </div>
@@ -921,12 +908,12 @@ export default function AdminPage() {
                                 </div>
 
                                 <div>
-                                  <div style={fieldLabelStyle}>Dirección</div>
+                                  <div style={fieldLabelStyle}>Direccion</div>
                                   <input
                                     value={draft.address}
                                     onChange={(e) => setProfileField(user.id, "address", e.target.value)}
                                     disabled={busy}
-                                    placeholder="Calle y número"
+                                    placeholder="Calle y numero"
                                     style={inputStyle}
                                   />
                                 </div>
@@ -954,12 +941,12 @@ export default function AdminPage() {
                                 </div>
 
                                 <div>
-                                  <div style={fieldLabelStyle}>País</div>
+                                  <div style={fieldLabelStyle}>Pais</div>
                                   <input
                                     value={draft.country}
                                     onChange={(e) => setProfileField(user.id, "country", e.target.value)}
                                     disabled={busy}
-                                    placeholder="País"
+                                    placeholder="Pais"
                                     style={inputStyle}
                                   />
                                 </div>

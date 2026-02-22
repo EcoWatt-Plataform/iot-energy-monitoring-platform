@@ -303,6 +303,86 @@ def _plan_from_user(user: dict) -> str:
     return "basico"
 
 
+def _plan_device_limit(plan: str) -> int | None:
+    if plan == "basico":
+        return 1
+    if plan == "avanzado":
+        return 3
+    return None
+
+
+def _plan_history_months(plan: str) -> int | None:
+    if plan == "basico":
+        return 3
+    if plan == "avanzado":
+        return 12
+    return None
+
+
+def _history_min_month(history_months: int) -> str:
+    months = max(1, int(history_months))
+    now = datetime.utcnow()
+    year = now.year
+    month = now.month - (months - 1)
+    while month <= 0:
+        month += 12
+        year -= 1
+    return f"{year:04d}-{month:02d}"
+
+
+def _enforce_month_history_limit(plan: str, month: str):
+    history_months = _plan_history_months(plan)
+    if history_months is None:
+        return None
+
+    min_month = _history_min_month(history_months)
+    if month < min_month:
+        return jsonify({
+            "error": (
+                f"Plan {plan.capitalize()} allows up to {history_months} months of history. "
+                f"Minimum allowed month: {min_month}"
+            )
+        }), 403
+    return None
+
+
+def _enforce_date_history_limit(plan: str, date_from: str, date_to: str):
+    history_months = _plan_history_months(plan)
+    if history_months is None:
+        return None
+
+    min_month = _history_min_month(history_months)
+    from_month = date_from[:7]
+    to_month = date_to[:7]
+    if from_month < min_month or to_month < min_month:
+        return jsonify({
+            "error": (
+                f"Plan {plan.capitalize()} allows up to {history_months} months of history. "
+                f"Minimum allowed month: {min_month}"
+            )
+        }), 403
+    return None
+
+
+def _resolve_owner_plan(actor_user: dict, owner_user_id: str):
+    actor_id = str(actor_user.get("id") or "")
+    if owner_user_id == actor_id:
+        return _plan_from_user(actor_user), None
+
+    try:
+        payload = _supabase_admin_request("GET", f"auth/v1/admin/users/{owner_user_id}")
+    except RuntimeError as e:
+        return "", (jsonify({"error": str(e)}), 500)
+    except SupabaseAdminError as e:
+        return "", (jsonify({"error": e.message}), e.status)
+
+    target_user = _extract_supabase_admin_user(payload)
+    if not isinstance(target_user, dict):
+        return "", (jsonify({"error": "target user not found"}), 404)
+
+    return _plan_from_user(target_user), None
+
+
 def _device_counts_by_owner() -> dict[str, int]:
     with get_con(_db_path()) as con:
         rows = con.execute(
@@ -764,6 +844,10 @@ def create_device():
     if owner_error:
         return owner_error
 
+    owner_plan, owner_plan_error = _resolve_owner_plan(user, owner_user_id)
+    if owner_plan_error:
+        return owner_plan_error
+
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "").strip()
     try:
@@ -778,12 +862,32 @@ def create_device():
     if threshold < 0:
         return jsonify({"error": "monthly_threshold_wh must be >= 0"}), 400
 
+    max_devices = _plan_device_limit(owner_plan)
+
     api_key = secrets.token_hex(16)
     owner_email = (user.get("email") or "").strip() or None
     if owner_user_id != str(user.get("id") or ""):
         owner_email = None
 
     with get_con(_db_path()) as con:
+        if max_devices is not None:
+            row = con.execute(
+                """
+                SELECT COUNT(*) AS total
+                FROM devices
+                WHERE owner_user_id = ?
+                """,
+                (owner_user_id,),
+            ).fetchone()
+            total_devices = int(row["total"] or 0) if row else 0
+            if total_devices >= max_devices:
+                return jsonify({
+                    "error": (
+                        f"Plan {owner_plan.capitalize()} allows up to {max_devices} "
+                        f"device(s) per account"
+                    )
+                }), 403
+
         cur = con.execute(
             """
             INSERT INTO devices(name, api_key, owner_user_id, owner_email, monthly_threshold_wh)
@@ -993,6 +1097,14 @@ def summary_month():
     if not month or len(month) != 7:
         return jsonify({"error": "month must be YYYY-MM"}), 400
 
+    owner_plan, owner_plan_error = _resolve_owner_plan(user, owner_user_id)
+    if owner_plan_error:
+        return owner_plan_error
+
+    history_error = _enforce_month_history_limit(owner_plan, month)
+    if history_error:
+        return history_error
+
     device_id = request.args.get("device_id", type=int)
 
     # Query base: stats por dispositivo (LEFT JOIN para incluir devices sin mediciones)
@@ -1137,6 +1249,14 @@ def metrics_daily():
         return jsonify({"error": "from must be YYYY-MM-DD"}), 400
     if not date_to or len(date_to) != 10:
         return jsonify({"error": "to must be YYYY-MM-DD"}), 400
+
+    owner_plan, owner_plan_error = _resolve_owner_plan(user, owner_user_id)
+    if owner_plan_error:
+        return owner_plan_error
+
+    history_error = _enforce_date_history_limit(owner_plan, date_from, date_to)
+    if history_error:
+        return history_error
 
     with get_con(_db_path()) as con:
         owns_device = con.execute(
