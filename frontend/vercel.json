@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "http://164.152.242.45/api/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "http://164.152.242.45/health"
+    }
+  ]
+}
