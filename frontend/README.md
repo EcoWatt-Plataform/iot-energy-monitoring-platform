@@ -1,126 +1,68 @@
-# EcoWatt Frontend
+# Frontend - IoT Energy Monitoring Platform
 
-Frontend web de EcoWatt construido con Next.js 16 (App Router).
-
-## Alcance funcional
-
-- Landing publica (`/`, `/producto`, `/soporte`, `/terminos`).
-- Paginas de planes (`/planes`, `/planes/basico`, `/planes/avanzado`, `/planes/premium`).
-- Carrito en 3 pasos:
-  1. Seleccion de plan SaaS.
-  2. Seleccion de medidores (Plug, Panel 1F, Panel 3F, Fase extra).
-  3. Formulario de comprador y envio de solicitud.
-- Checkout conectado a `POST /api/v1/checkout/request`.
-- Dashboard de consumo (`/dashboard`) con restricciones por plan.
-- Admin login (`/admin/login`) y panel admin (`/admin`) para gestionar usuarios y solicitudes de checkout.
-
-## Precios y reglas que usa el frontend
-
-Definidos en `frontend/lib/purchase.ts`.
-
-### Planes (mensual, ARS)
-
-- Basico: `7900`, hasta 1 medidor, sin exportaciones.
-- Avanzado: `12900`, hasta 3 medidores, sin exportaciones.
-- Premium: `19900`, hasta 6 medidores, exportaciones premium.
-
-Nota: no existe funcionalidad multiusuario por plan.
-
-### Hardware (venta unica, ARS)
-
-- EcoWatt Plug: `49900`
-- EcoWatt Panel 1 fase: `149900`
-- EcoWatt Panel 3 fases: `219900`
-- Fase extra: `34900`
+Aplicacion Next.js del proyecto, con autenticacion via Supabase y visualizacion del dashboard de consumo.
 
 ## Requisitos
 
 - Node.js 18+
-- Backend Flask ejecutandose en `http://127.0.0.1:5000` (en desarrollo)
-- Proyecto Supabase configurado para Auth
+- npm
+- Backend Flask corriendo en `http://127.0.0.1:5000`
 
-## Variables de entorno
-
-Crear `frontend/.env.local` desde `frontend/.env.example`:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://TU_PROYECTO.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=TU_SUPABASE_ANON_KEY
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
-```
-
-Notas:
-
-- `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` son obligatorias.
-- Para login con Google, configurar URLs de callback en Supabase (`/auth/callback`).
-
-## Comandos
+## Instalacion
 
 ```bash
 cd frontend
-npm ci
+npm install
+```
+
+## Variables de entorno
+
+Crear `frontend/.env.local` con:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://TU_PROYECTO.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=TU_ANON_KEY
+# Alternativa valida si ya la usas:
+# NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=TU_PUBLISHABLE_KEY
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+```
+
+Tambien puedes partir desde `frontend/.env.example`.
+
+## Configuracion de Supabase (Google OAuth)
+
+1. Supabase > Settings > API: copiar URL y key publica.
+2. Supabase > Authentication > URL Configuration:
+   - Site URL: `http://localhost:3000`
+   - Redirect URL: `http://localhost:3000/auth/callback`
+3. Supabase > Authentication > Providers > Google:
+   - habilitar Google
+   - cargar Client ID/Secret de Google Cloud
+
+## Ejecutar en desarrollo
+
+```bash
 npm run dev
+```
+
+Abrir `http://localhost:3000`.
+
+## Build de produccion
+
+```bash
 npm run build
 npm run start
-npm run lint
 ```
 
-Desarrollo: `http://localhost:3000`
+## Flujo esperado
 
-## Integracion con backend
+1. Click en `Ingresar con Google`.
+2. Supabase redirige a Google.
+3. Callback en `/auth/callback`.
+4. Redireccion a `/dashboard`.
 
-`frontend/next.config.ts` reescribe `/api/:path*` a `http://127.0.0.1:5000/api/:path*`.
-Esto evita CORS durante desarrollo local.
+## Problemas comunes
 
-## Flujo de checkout (interno)
-
-1. El usuario arma carrito (`plan` + `meters`) y se guarda en localStorage.
-2. En `/checkout` completa datos (`fullName`, `phone`, `email`, `documentType`, `documentNumber`, `address`, `propertyType`).
-3. El frontend calcula un fingerprint del payload y usa `idempotency_key` para evitar duplicados.
-4. Se envia `POST /api/v1/checkout/request`.
-5. Si responde OK, se limpia carrito/borrador y se muestra resumen.
-
-Claves de localStorage usadas:
-
-- `ecowatt_purchase_cart_v3`
-- `ecowatt_checkout_form_v3`
-- `ecowatt_checkout_idempotency_v1`
-
-## Panel admin (frontend)
-
-Para que el panel admin funcione:
-
-- El backend debe tener `SUPABASE_SERVICE_ROLE_KEY`.
-- El backend debe definir `ADMIN_EMAILS` con los correos permitidos.
-
-Rutas:
-
-- `/admin/login`
-- `/admin`
-
-## Branding y metadatos
-
-Definidos en `frontend/app/layout.tsx`:
-
-- Icono navegador: `/logo.PNG`
-- Open Graph / WhatsApp preview: `/og-ecowatt.jpg`
-
-## Estructura relevante
-
-```text
-frontend/
-|- app/
-|  |- admin/
-|  |- carrito/
-|  |- checkout/
-|  |- dashboard/
-|  |- planes/
-|  |- layout.tsx
-|- lib/
-|  |- purchase.ts
-|  `- supabase/
-|- public/
-|  |- logo.PNG
-|  `- og-ecowatt.jpg
-`- next.config.ts
-```
+- Error de variables Supabase: revisar `.env.local` y reiniciar Next.
+- Dashboard vacio o errores API: confirmar backend Flask en `127.0.0.1:5000`.
+- Error de redirect OAuth: revisar URLs en Supabase exactamente como arriba.

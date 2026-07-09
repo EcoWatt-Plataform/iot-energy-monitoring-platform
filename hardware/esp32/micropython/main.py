@@ -59,11 +59,25 @@ def ina_read():
 # ---------------- WIFI + POST ----------------
 def wifi_connect():
     wlan = network.WLAN(network.STA_IF)
+    try:
+        if wlan.active() and not wlan.isconnected():
+            wlan.disconnect()
+            wlan.active(False)
+            time.sleep_ms(200)
+    except Exception:
+        pass
+
     wlan.active(True)
 
     if not wlan.isconnected():
         print("Conectando WiFi...")
-        wlan.connect(SSID, PASS)
+        try:
+            wlan.connect(SSID, PASS)
+        except OSError:
+            wlan.active(False)
+            time.sleep_ms(200)
+            wlan.active(True)
+            wlan.connect(SSID, PASS)
         t0 = time.ticks_ms()
 
         while not wlan.isconnected():
