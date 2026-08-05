@@ -4,11 +4,9 @@ from machine import I2C, Pin
 import ujson
 import urequests
 
-# ---------------- CONFIG ----------------
 try:
     from config_local import SSID, PASS, PC_IP, API_KEY, I2C_ADDR, R_SHUNT_OHMS, INTERVAL_S
 except ImportError:
-    # Safe fallback for commits (no real secrets)
     SSID = "TU_WIFI"
     PASS = "TU_PASSWORD"
     PC_IP = "192.168.X.Y"
@@ -19,7 +17,6 @@ except ImportError:
 
 URL = "http://%s:5000/api/v1/measurements" % PC_IP
 
-# ---------------- INA219 ----------------
 REG_CONFIG = 0x00
 REG_SHUNT_V = 0x01
 REG_BUS_V = 0x02
@@ -39,14 +36,13 @@ def read_s16(reg):
     return v
 
 
-def ina_init():
-    # Continuous mode, typical range.
+def ina_init():    
     i2c.writeto_mem(I2C_ADDR, REG_CONFIG, bytes([0x39, 0x9F]))
 
 
 def ina_read():
-    shunt_raw = read_s16(REG_SHUNT_V)  # 10uV/bit
-    bus_raw = read_u16(REG_BUS_V)  # 4mV/bit (shifted)
+    shunt_raw = read_s16(REG_SHUNT_V)  
+    bus_raw = read_u16(REG_BUS_V)  
 
     shunt_v = shunt_raw * 0.00001
     bus_v = (bus_raw >> 3) * 0.004
@@ -56,7 +52,6 @@ def ina_read():
     return bus_v, current_a, power_w
 
 
-# ---------------- WIFI + POST ----------------
 def wifi_connect():
     wlan = network.WLAN(network.STA_IF)
     try:
@@ -122,7 +117,6 @@ def post_measurement(v, i, p, e_wh):
                 response.close()
 
 
-# ---------------- MAIN ----------------
 wlan = wifi_connect()
 ina_init()
 last_ms = time.ticks_ms()
@@ -135,7 +129,7 @@ while True:
     try:
         wlan = ensure_wifi(wlan)
         v, i, p = ina_read()
-        e_wh = p * (dt_s / 3600.0)  # Incremental energy.
+        e_wh = p * (dt_s / 3600.0)
         print("V/I/P:", v, i, p, "E_wh:", e_wh)
         post_measurement(v, i, p, e_wh)
     except Exception as e:
