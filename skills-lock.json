@@ -6,6 +6,18 @@
       "sourceType": "github",
       "skillPath": "skills/brainstorming/SKILL.md",
       "computedHash": "79fec75eb8cb46ec4d5e119a08d5366dfe2f1b56d876b2ea5633fa80f8aa1f7c"
+    },
+    "subagent-driven-development": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/subagent-driven-development/SKILL.md",
+      "computedHash": "3cd0e609ff5e4347326b6201ea398b9204850e164475d49d96bced1f8cba8974"
+    },
+    "writing-plans": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/writing-plans/SKILL.md",
+      "computedHash": "a8a8b0d07b744173079b25d26c6a189a0b5e7ddd80444ce92055b974dab7352b"
     }
   }
 }
